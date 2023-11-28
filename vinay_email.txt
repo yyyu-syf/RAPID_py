@@ -1,0 +1,23 @@
+Hi Zida,
+
+The river data is available in the 3D-CHESS shared google drive folder.
+3D-CHESS -> Scenarios -> Scenario3
+https://drive.google.com/drive/folders/1YRtH1geA13aLkftvki0Kw1CQRs5QnjA-?usp=drive_link
+
+This folder (TX_width) providers the raw data as given by George:
+https://drive.google.com/drive/folders/1WyZRJUf8ohypaceK7twmGdRqFMuwOJqm?usp=drive_link
+
+A csv file (river_info.csv) with the stream widths per day of the year is here:
+https://drive.google.com/file/d/1MoQXhFzwqjB28jAdPjSbhDE0xKvTEwpm/view?usp=drive_link
+
+I made a python script (process_river_data.py)  to process the raw river data from George. The raw data contains some more parameters about the streams than just the widths. For example, I believe each stream is not identified by just the first and last vertices, but it can contain several intermediate vertices (and hence made up of sequence of line segments). 
+You may modify the script to access these other parameters as well.
+https://drive.google.com/file/d/1gN6QqHLK2ndpFr3N7_0zMs20su08o2wy/view?usp=drive_link
+
+There are two other folders called TX_CDF and TX_uncertainity, which contain wet/dry uncertainty estimates. George produced the dataset.
+
+I have also attached a couple of pdfs of emails which are relevant to the dataset.
+Please let me know if there are any questions.
+
+Best,
+Vinay

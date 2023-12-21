@@ -5,12 +5,12 @@ import math
 import matplotlib.animation as animation
 import geopandas as gpd
 import os
-from scipy.stats import multivariate_normal as scipy_guassian
 import time
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 from utility import PreProcessor
 import pickle
+from infokf import InfoKalmanFilter
 
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
@@ -88,69 +88,57 @@ class RAPIDKF():
         with open(os.path.join(dir_path, dis_name), 'wb') as f:
                 pickle.dump(saved_dict, f)
             
-    def simulate(self):
+    
+    def simulateDKF(self):
+        '''
+        Simulation of multiple nodes perform decentralized estimation
+        '''
         kf_estimation = []
         self.x = self.u[0]
         print(f"state shape: {self.x.shape}")
+        infoKF_agents = []
+        dim_z_individual = 1
+        
+        # Generate agents
+        infoKF_agents = []
+        num_dec_agent = len(self.obs_data.shape[-1])
+        for i in range(num_dec_agent):
+            H_i = self.H[i* dim_z_individual:((i+1)* dim_z_individual),:]
+            R_i = self.R[i* dim_z_individual:((i+1)* dim_z_individual),i* dim_z_individual:((i+1)* dim_z_individual)]
+            infoKF = InfoKalmanFilter(A = self.Ae, H = H_i, R = R_i, P = self.P, x0 = self.u[0])
+            infoKF_agents.append(infoKF)
+            
+        # Run simulation
         for timestep in range(self.days):
-            self.predict(self.u[timestep])
-            self.update(self.obs_data[timestep])
-            kf_estimation.append(self.getState()) 
-            TBD:
-                q0 + Qe calculate again everyday
-                   
-    def predict(self,u=None):
-        if u is None:
-            u = np.zeros((self.B.shape[-1], 1))
-        self.x_last = self.x
-        self.x = u
-        # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
-        self.timestep += 1
-        
-        return self.x
-    
-    
-    def update(self, z, inputType=None):
-        if inputType is not None:
-            self.u, self.u_var = self.input_estimation(z)
-            self.x = self.x + np.dot(self.B,self.u)
-            innovation=  z - np.dot(self.H, self.x)
-        else: 
-            innovation = z - np.dot(self.H, self.x)
-        
-        self.R = np.diag(0.1*z)
-        print(f"R shape {self.R}")
-        S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
-        K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
-        self.x = self.x + np.dot(K, innovation)
-        # self.P = self.P - np.dot(np.dot(K,self.H),self.P)   
+            infoPlist = []
+            infoPpredlist = []
+            xlist = []
+            xpredlist = []
+            
+            ### Individual estimation
+            for i_kf, agent in enumerate(infoKF_agents):
+                agent.predict(self.u[timestep])  
 
-    
-    def input_estimation(self,z): 
-        F = np.dot(self.H, self.B)
-        S = np.dot(np.dot(self.H,self.P),self.H.T)+self.R
-        M_1 = np.linalg.inv(np.dot(np.dot(F.T,np.linalg.inv(S)),F))
-        M_2 = np.dot(F.T,np.linalg.inv(S))
-        M = np.dot(M_1,M_2)
-        innovation = z - np.dot(self.H, self.x)
-        u = np.dot(M,innovation)
-        u_var = M_1
+                z_i = self.obs_data[timestep][i_kf*dim_z_individual:((i_kf+1)*dim_z_individual)]
+                xpred ,Ppred,x_broadcast_,infoP_broadcast_ = agent.updateInfoKF(z_i)
+                
+                infoPlist.append(infoP_broadcast_)
+                infoPpredlist.append(Ppred)
+                xlist.append(x_broadcast_)
+                xpredlist.append(xpred)
+                
+                
+            ### Fusion via information exchange
+            for i_kf, agent in enumerate(infoKF_agents):
+                z_i = self.obs_data[timestep][i_kf*dim_z_individual:((i_kf+1)*dim_z_individual)]
+              
+                agent.updateAfterCommunication(infoPlist,
+                                                infoPpredlist,
+                                                xlist,xpredlist
+                                                )
+            # All estimation should be the same after exchange, just extract agent 0th
+            kf_estimation.append(infoKF_agents[0].getState()) 
 
-        return u, u_var 
-    
-    def getState(self):
-        return self.x
-    
-    def getP(self):
-        return self.P
-
-    def getR(self):
-        return self.R
-    
-    def getH(self):
-        return self.H
-    
-    
     
     
 if __name__ == '__main__':

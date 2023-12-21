@@ -34,13 +34,13 @@ class PreProcessor():
         self.i_factor = kwargs['i_factor'] 
         
         # Load data
-        reach_id = pd.read_csv(id_path)
+        reach_id = pd.read_csv(id_path, header=None)
         connect_data = pd.read_csv(connect_path)
         m3riv_data = pd.read_csv(m3riv_path)
-        x_data = pd.read_csv(x_path)
-        k_data = pd.read_csv(k_path)
+        x_data = pd.read_csv(x_path, header=None)
+        k_data = pd.read_csv(k_path, header=None)
         obs_data = pd.read_csv(obs_path)
-        obs_id = pd.read_csv(obs_id_path)
+        obs_id = pd.read_csv(obs_id_path, header=None)
         vic_data_m = pd.read_csv(vic_model_path)
         ens_data_m= pd.read_csv(ens_model_path)
         
@@ -54,16 +54,15 @@ class PreProcessor():
         ens_data_m = ens_data_m[0:self.month]
         m3riv_data = m3riv_data[0:self.days*8]
         obs_data = obs_data[0:self.days]
-        obs_data = obs_data
         self.l_reach = x_data.shape[0]
         
+        print(f"reach nums: {self.l_reach}")
         print(f"m3riv_data {m3riv_data.shape}")
+        print(f"obs_id:  {obs_id.shape}")
         
         ### process lateral inflow from 3-hourly to daily varaged
-        # lateral_daily = m3riv_data.sum(axis=0)
         lateral_daily = m3riv_data.to_numpy().reshape((self.days, 8, m3riv_data.shape[-1])).sum(axis=1)
         lateral_daily_averaged = lateral_daily/8
-        lateral_daily_averaged = pd.DataFrame(lateral_daily_averaged)
         
         print(f"lateral_daily data shape: {lateral_daily.shape} ")
         
@@ -108,8 +107,8 @@ class PreProcessor():
             
         H = np.dot(S,self.Ae)
         
-        # R
-        R = np.diag(0.1*obs_data)
+        # R at initial state
+        R = np.diag(0.1*obs_data.to_numpy()[0])
         
         print(f"Dim of R: {R.shape}")
         
@@ -122,7 +121,7 @@ class PreProcessor():
         np.savetxt("delta.csv", delta[0:100], delimiter=",")
         np.savetxt("P.csv", P[0:300,0:300] , delimiter=",")
         
-        return self.Ae, self.A0, H, P, R, lateral_daily_averaged
+        return self.Ae, self.A0, H, P, R, lateral_daily_averaged, obs_data.to_numpy()
         
         
     def calculate_connectivity(self,connect_data):

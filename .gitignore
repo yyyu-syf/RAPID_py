@@ -7,3 +7,5 @@ A4.csv
 A5.csv
 P.csv
 delta.csv
+*.pkl
+*.pyc

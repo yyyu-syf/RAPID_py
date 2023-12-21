@@ -9,9 +9,10 @@ import time
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 from utility import PreProcessor
+import pickle
 
 class RAPIDKF():
-    def __init__(self) -> None:
+    def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         self.epsilon = 0.001 #muksingum parameter threshold
         self.radius = 20
@@ -19,8 +20,24 @@ class RAPIDKF():
         self.days = 366 #2010 year 366 days
         self.month = self.days//365 * 12
         self.timestep = 0
-        self.load_file(dir_path)
+        if load_mode==0:
+            self.load_file(dir_path)
+        else:
+            self.load_pkl(dir_path)
         
+    def load_pkl(self,dir_path):       
+        dis_name = 'load_coef.pkl'
+        with open(os.path.join(dir_path, dis_name),'rb') as f:
+            saved_dict = pickle.load(f)
+        
+        self.Ae = saved_dict['Ae'] 
+        self.A0 = saved_dict['A0'] 
+        self.H = saved_dict['H'] 
+        self.P = saved_dict['P'] 
+        self.R = saved_dict['R'] 
+        self.u = saved_dict['u'] 
+        self.obs_data = saved_dict['obs_data'] 
+            
             
     def load_file(self,dir_path):
         id_path = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
@@ -54,9 +71,23 @@ class RAPIDKF():
             }
     
         dataProcessor = PreProcessor()
-        self.Ae, self.A0, self.H, self.P, self.R, self.lateral_daily_averaged = dataProcessor.pre_processing(**params)
+        self.Ae, self.A0, self.H, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
         
-    
+        saved_dict = {
+                'Ae': self.Ae,
+                'A0': self.A0,
+                'H': self.H,
+                'P': self.P,
+                'R': self.R,
+                'u': self.u,
+                'obs_data': self.obs_data,
+            }
+        
+        dis_name = 'load_coef.pkl'
+        with open(os.path.join(dir_path, dis_name), 'wb') as f:
+                pickle.dump(saved_dict, f)
+            
+            
     def predict(self,u=None):
         if u is None:
             u = np.zeros((self.B.shape[-1], 1))
@@ -75,7 +106,9 @@ class RAPIDKF():
             innovation=  z - np.dot(self.H, self.x)
         else: 
             innovation = z - np.dot(self.H, self.x)
-
+        
+        self.R = np.diag(0.1*z)
+        print(f"R shape {self.R}")
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)
@@ -86,8 +119,10 @@ class RAPIDKF():
     
     def simulate(self):
         kf_estimation = []
+        self.x = self.u[0]
+        print(f"state shape: {self.x.shape}")
         for timestep in range(self.days):
-            self.predict(self.lateral_daily_averaged[timestep])
+            self.predict(self.u[timestep])
             self.update(self.obs_data[timestep])
             kf_estimation.append(self.getState())
     
@@ -108,7 +143,7 @@ class RAPIDKF():
     
     
 if __name__ == '__main__':
-    rapid_kf = RAPIDKF()
+    rapid_kf = RAPIDKF(load_mode=1)
     rapid_kf.simulate()
     k=1
     x=0.35

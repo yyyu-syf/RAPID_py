@@ -35,14 +35,14 @@ class PreProcessor():
         
         # Load data
         reach_id = pd.read_csv(id_path, header=None)
-        connect_data = pd.read_csv(connect_path)
-        m3riv_data = pd.read_csv(m3riv_path)
+        connect_data = pd.read_csv(connect_path, header=None)
+        m3riv_data = pd.read_csv(m3riv_path, header=None)
         x_data = pd.read_csv(x_path, header=None)
         k_data = pd.read_csv(k_path, header=None)
-        obs_data = pd.read_csv(obs_path)
+        obs_data = pd.read_csv(obs_path, header=None)
         obs_id = pd.read_csv(obs_id_path, header=None)
-        vic_data_m = pd.read_csv(vic_model_path)
-        ens_data_m= pd.read_csv(ens_model_path)
+        vic_data_m = pd.read_csv(vic_model_path, header=None)
+        ens_data_m= pd.read_csv(ens_model_path, header=None)
         
         # cutoff data based on perference
         cutoff = len(reach_id)
@@ -94,34 +94,51 @@ class PreProcessor():
         self.musking_C2 = np.diag(self.musking_C2)
         self.musking_C3 = np.diag(self.musking_C3)
         
-        # Calculate connectivity matrix
+        # # Calculate connectivity matrix
         self.calculate_connectivity(connect_data)
         
-        # Calculate dynamics coefficient
+        # # Calculate dynamics coefficient
         self.calculate_coefficient()
         
         # S
+        obs_id = obs_id.to_numpy().flatten()
+        reach_id = reach_id.to_numpy().flatten()
         S = np.zeros((len(obs_id),len(reach_id)), dtype=int)
         for i, obs in enumerate(obs_id):
-            S[i, np.where(reach_id == obs)] = 1
-            
-        H = np.dot(S,self.Ae)
+            index = np.where(reach_id == obs)[0]
+            S[i, index] = 1
+        
+        # He = np.dot(S,self.Ae)
+        # H0 = np.dot(S,self.A0)
+        H = S
         
         # R at initial state
-        R = np.diag(0.1*obs_data.to_numpy()[0])
+        R0 = 0.1*obs_data.to_numpy()[0]
+        R = np.diag(R0**2)
         
         print(f"Dim of R: {R.shape}")
         
-        # P
+        # P and prune P based on radius
         delta = abs((vic_data_m - ens_data_m).sum(axis=0)/12)
+        print(f"shape of delta:{delta.shape}")
         P = self.i_factor * np.dot(delta.values.reshape(-1,1),delta.values.reshape(-1,1).T)
+        pruned_P = self.pruneP(P,connect_data,self.radius)
         
         print(f"Dim of P: {P.shape}")
         print(f"vic shape: {vic_data_m.shape}")
-        np.savetxt("delta.csv", delta[0:100], delimiter=",")
-        np.savetxt("P.csv", P[0:300,0:300] , delimiter=",")
         
-        return self.Ae, self.A0, H, P, R, lateral_daily_averaged, obs_data.to_numpy()
+        np.savetxt("model_saved/P_delta.csv", delta, delimiter=",")
+        np.savetxt("model_saved/P.csv", P , delimiter=",")
+        np.savetxt("model_saved/prunedP.csv", pruned_P , delimiter=",")
+        np.savetxt("model_saved/H.csv", H , delimiter=",")
+        np.savetxt("model_saved/R.csv", R, delimiter=",")
+        np.savetxt("model_saved/z.csv", obs_data, delimiter=",")
+        np.savetxt("model_saved/u.csv", lateral_daily_averaged, delimiter=",")
+        np.savetxt("model_saved/Ae.csv", self.Ae, delimiter=",")
+        np.savetxt("model_saved/A0.csv", self.A0, delimiter=",")
+        np.savetxt("model_saved/N.csv", self.N, delimiter=",")
+        
+        return self.Ae, self.A0, H, pruned_P, R, lateral_daily_averaged, obs_data.to_numpy()
         
         
     def calculate_connectivity(self,connect_data):
@@ -130,31 +147,31 @@ class PreProcessor():
         # Sort the DataFrame by ID
         # river_network = connect_data.sort_values(by='ID column name')
         river_network = connect_data
-
         # Initialize the connectivity matrix
         connectivity_matrix_N = np.zeros((self.l_reach, self.l_reach), dtype=int)
 
         # Populate the matrix
         for row_index, row in river_network.iterrows():
             reach_id = row[0]
-            # Adjust index if ID does not start at 0 or 1
-            ## check id:
+            # check id:
             upStreamNum = 0
             for i in range(3, 6):  # Columns 4 to 7
                 upstream_id = row[i]
                 if upstream_id > 0:  # Check if the upstream ID is not 0
                     upStreamNum += 1
-                    
-                    up_row_index = connect_data.index[connect_data['id'] == upstream_id].tolist()
+                    condition = river_network['id'] == upstream_id
+                    if condition.any():
+                        up_row_index = river_network.index[condition].tolist()
+                        
                     # Adjust indices if necessary
                     connectivity_matrix_N[row_index, up_row_index] = 1
-                    
+
         self.N = connectivity_matrix_N
         
 
     def calculate_coefficient(self):
         '''
-        Coefficient Ae, A0, and observation H
+        Coefficient Ae, A0
         '''
         ### (I-C1N)^-1 ###
         mat_I = np.identity(self.l_reach)
@@ -180,20 +197,24 @@ class PreProcessor():
         
         # ### Ae ###
         print(f"A4 shape {A4.shape}")
-        np.savetxt("A4.csv", A4[0:100,0:100], delimiter=",")
+        np.savetxt("model_saved/A4.csv", A4[0:100,0:100], delimiter=",")
         print(f"A5 shape {A5.shape}")
-        np.savetxt("A5.csv", A5[0:100,0:100], delimiter=",")
+        np.savetxt("model_saved/A5.csv", A5[0:100,0:100], delimiter=",")
         
         Ae = np.zeros((self.l_reach,self.l_reach))
         for p in np.arange(0,96):
-            Ae += np.dot((96-p)/96 * A4**p,A5) 
+            # Ae += np.dot((96-p)/96 * A4**p,A5) 
+            Ae += np.dot((96-p)/96 * np.linalg.matrix_power(A4, p),A5) 
         
         A0 = np.zeros((self.l_reach,self.l_reach))
         for p in np.arange(1,96):
-            A0 += 1/96 * A4**p 
+            # A0 += 1/96 * A4**p 
+            A0 += 1/96 * np.linalg.matrix_power(A4, p)
         
-        self.Ae = sum(np.dot((96-p)/96 * A4**p,A5) for p in range(96))
-        self.A0 = sum(1/96 * A4**p for p in np.arange(1,96))
+        self.Ae = Ae
+        self.A0 = A0
+        # self.Ae = sum(np.dot((96-p)/96 * A4**p,A5) for p in range(96))
+        # self.A0 = sum(1/96 * A4**p for p in np.arange(1,96))
         
 
     def calculate_Cs(self,k, x, delta_t):
@@ -203,5 +224,45 @@ class PreProcessor():
         C3 = (k * (1 - x) - delta_t/2) / ((k * (1 - x) + delta_t/2))
 
         return C1, C2, C3
+    
+    
+    def pruneP(self,P, river_network, radius):
+        # Generate mask
+        column_names = ['id', 'downId', 'numUp', 'upId1','upId2','upId3','upId4']
+        river_network.columns = column_names
+        maskP = np.zeros_like(P)
+        
+        for row_index, row in river_network.iterrows():
+            maskP[row_index,row_index] = 1
+            
+            downStreamId = row[0]
+            # print(f" type  {river_network.index[river_network['id'] == upStreamId]}")
+            for _ in range(radius):
+                condition = river_network['id'] == downStreamId
+                if condition.any():
+                    down_row_index = river_network.index[condition].tolist()
+
+                maskP[row_index,down_row_index] = 1
+                maskP[down_row_index,row_index] = 1
+                downStreamId = river_network.iloc[down_row_index]['downId'].tolist()[0]
+                
+        # save the mask
+        w = P.shape[0]
+        plt.figure(figsize=(8, 8))
+        plt.imshow(maskP, cmap='Greys', interpolation='none')
+        # plt.colorbar(label='Density')
+        plt.title(f"P density with R = {radius}")
+
+        # Adding axis ticks to show indices
+        plt.xticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
+        plt.yticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
+        plt.grid(color='gray', linestyle='-', linewidth=0.5)
+
+        # Saving the plot with coordinates in high-resolution
+        plt.savefig("model_saved/density_P.png", dpi=300, bbox_inches='tight')
+        
+        return P * maskP
+            
+        
     
     

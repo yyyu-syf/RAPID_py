@@ -27,18 +27,19 @@ class RAPIDKF():
             self.load_pkl(dir_path)
         
     def load_pkl(self,dir_path):       
-        dis_name = 'load_coef.pkl'
+        dis_name = 'model_saved/load_coef.pkl'
         with open(os.path.join(dir_path, dis_name),'rb') as f:
             saved_dict = pickle.load(f)
         
         self.Ae = saved_dict['Ae'] 
         self.A0 = saved_dict['A0'] 
-        self.H = saved_dict['H'] 
+        self.S = saved_dict['H'] 
         self.P = saved_dict['P'] 
         self.R = saved_dict['R'] 
         self.u = saved_dict['u'] 
         self.obs_data = saved_dict['obs_data'] 
-            
+        self.H = np.dot(self.S,self.Ae)
+        
             
     def load_file(self,dir_path):
         id_path = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
@@ -72,38 +73,43 @@ class RAPIDKF():
             }
     
         dataProcessor = PreProcessor()
-        self.Ae, self.A0, self.H, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
+        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
         
         saved_dict = {
                 'Ae': self.Ae,
                 'A0': self.A0,
-                'H': self.H,
+                'H': self.S,
                 'P': self.P,
                 'R': self.R,
                 'u': self.u,
                 'obs_data': self.obs_data,
             }
-        
-        dis_name = 'load_coef.pkl'
+                
+        dis_name = 'model_saved/load_coef.pkl'
         with open(os.path.join(dir_path, dis_name), 'wb') as f:
                 pickle.dump(saved_dict, f)
             
     def simulate(self):
         kf_estimation = []
-        self.x = self.u[0]
+        discharge_estimation = []
+        self.x = self.u[0]     #self.x is Qe
+        self.Q0 = np.zeros_like(self.u[0])
         print(f"state shape: {self.x.shape}")
         for timestep in range(self.days):
             self.predict(self.u[timestep])
             self.update(self.obs_data[timestep])
+            self.update_discharge()
             kf_estimation.append(self.getState()) 
-            TBD:
-                q0 + Qe calculate again everyday
-                   
+            discharge_estimation.append(self.getQ0())
+
+        np.savetxt("model_saved/Discharge_est.csv", discharge_estimation, delimiter=",")
+        np.savetxt("model_saved/Lateral_est.csv", kf_estimation, delimiter=",")
+        
     def predict(self,u=None):
-        if u is None:
-            u = np.zeros((self.B.shape[-1], 1))
-        self.x_last = self.x
-        self.x = u
+        if u is not None:
+            # u = np.zeros((self.B.shape[-1], 1))
+            self.x = u
+        # self.x = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
         # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
         self.timestep += 1
         
@@ -111,6 +117,8 @@ class RAPIDKF():
     
     
     def update(self, z, inputType=None):
+        ### In RAPID model, inputType = None
+        z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
         if inputType is not None:
             self.u, self.u_var = self.input_estimation(z)
             self.x = self.x + np.dot(self.B,self.u)
@@ -118,13 +126,19 @@ class RAPIDKF():
         else: 
             innovation = z - np.dot(self.H, self.x)
         
-        self.R = np.diag(0.1*z)
-        print(f"R shape {self.R}")
+        diag_R = 0.01*z**2
+        self.R = np.diag(diag_R)
+        
+        # print(f"R shape {self.R}")
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P)   
 
+    
+    def update_discharge(self):
+        self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
+    
     
     def input_estimation(self,z): 
         F = np.dot(self.H, self.B)
@@ -149,6 +163,9 @@ class RAPIDKF():
     
     def getH(self):
         return self.H
+    
+    def getQ0(self):
+        return self.Q0
     
     
     

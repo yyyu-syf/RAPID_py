@@ -94,6 +94,7 @@ class RAPIDKF():
         Simulation of multiple nodes perform decentralized estimation
         '''
         kf_estimation = []
+        discharge_estimation = []
         self.x = self.u[0]
         print(f"state shape: {self.x.shape}")
         infoKF_agents = []
@@ -101,11 +102,12 @@ class RAPIDKF():
         
         # Generate agents
         infoKF_agents = []
-        num_dec_agent = len(self.obs_data.shape[-1])
+        num_dec_agent = self.obs_data.shape[-1]
+        
         for i in range(num_dec_agent):
             H_i = self.H[i* dim_z_individual:((i+1)* dim_z_individual),:]
             R_i = self.R[i* dim_z_individual:((i+1)* dim_z_individual),i* dim_z_individual:((i+1)* dim_z_individual)]
-            infoKF = InfoKalmanFilter(A = self.Ae, H = H_i, R = R_i, P = self.P, x0 = self.u[0])
+            infoKF = InfoKalmanFilter(A = self.Ae, B = self.A0, H = H_i, R = R_i, P = self.P, x0 = self.u[0])
             infoKF_agents.append(infoKF)
             
         # Run simulation
@@ -136,14 +138,14 @@ class RAPIDKF():
                                                 infoPpredlist,
                                                 xlist,xpredlist
                                                 )
+                agent.update_discharge()
+                
             # All estimation should be the same after exchange, just extract agent 0th
             kf_estimation.append(infoKF_agents[0].getState()) 
+            discharge_estimation.append(infoKF_agents[0].getQ0()) 
 
     
     
 if __name__ == '__main__':
-    rapid_kf = RAPIDKF(load_mode=1)
-    rapid_kf.simulate()
-    k=1
-    x=0.35
-    delta_t = 3
+    rapid_kf = RAPIDKF(load_mode=0)
+    rapid_kf.simulateDKF()

@@ -20,17 +20,21 @@ class InfoKalmanFilter(object):
         self.Q = np.eye(self.n)*0 if Q is None else Q 
         self.R = np.eye(self.m) if R is None else R
         self.P = np.eye(self.n) if P is None else P
+        self.u = np.zeros((self.B.shape[-1], 1))
+        print(f"shape P: {self.P.shape}")
         self.infoP = np.linalg.inv(self.P)
         self.x = np.zeros((self.n, 1)) if x0 is None else x0
         self.x_last = np.zeros((self.n, 1)) if self.x is None else self.x
+        self.Q0 = np.zeros_like(self.u)
         self.timestep = 0
         self.W = np.zeros((self.n, self.m))
     
     def predict(self,u=None):
         if u is None:
             u = np.zeros((self.B.shape[-1], 1))
-        self.x_last = self.x
-        self.x = u
+            self.x = u # only applicable for 
+        # self.x_last = self.x
+        self.x = np.dot(self.A,self.x)
         # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
         self.timestep += 1
         
@@ -53,8 +57,10 @@ class InfoKalmanFilter(object):
         '''
         Update based on information filter, for decentralized purpose
         '''
+        z = z - np.dot(self.H, np.dot(self.B,self.Q0))
         self.xpred = self.x
-        self.R = np.diag(0.1*z)
+        diag_R = 0.01*z**2
+        self.R = np.diag(diag_R)
         innovation = z - np.dot(self.H, self.xpred)     
         
         if self.timestep <= 1:
@@ -80,7 +86,6 @@ class InfoKalmanFilter(object):
         xpredlist: x prediction list from all nodes including itself,x(k+1|k)
         '''
         compensation_x = np.zeros_like(self.x)
-        compensation_u = np.zeros_like(self.x)
         compensation_infoP = np.zeros_like(self.infoP)
 
         for i in range(len(xlist)):
@@ -108,6 +113,10 @@ class InfoKalmanFilter(object):
 
         return u, u_var 
     
+    def update_discharge(self):
+        self.Q0 = np.dot(self.A,self.x) + np.dot(self.B,self.Q0)
+    
+    
     def getState(self):
         return self.x
     
@@ -119,3 +128,6 @@ class InfoKalmanFilter(object):
     
     def getH(self):
         return self.H
+    
+    def getQ0(self):
+        return self.Q0

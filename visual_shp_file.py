@@ -39,6 +39,6 @@ plt.xlabel('Longitude')
 plt.ylabel('Latitude')
 
 # Save the figure
-save_path_2 = './stream_gage_event_plot.png'
+save_path_2 = './figure/stream_gage_event_plot.png'
 plt.savefig(save_path_2)
 plt.show()

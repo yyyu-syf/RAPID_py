@@ -9,3 +9,5 @@ P.csv
 delta.csv
 *.pkl
 *.pyc
+model_saved
+test.py

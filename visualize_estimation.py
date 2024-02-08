@@ -21,7 +21,9 @@ def lat_lon_to_cartesian(lat, lon, lat_ref, lon_ref):
 
 
 file_path = './rapid_data/NHDFlowline_San_Guad/reach_info.csv'
-kf_path = './model_saved/Discharge_est.csv'
+kf_path = './model_saved/dkf_discharge_est.csv'
+kf_path = './model_saved/discharge_est_kf2.csv'
+kf_path = './model_saved/discharge_est.csv'
 # kf_path = './model_saved/u.csv'
 kf_id_path = './rapid_data/rivid.csv'
 
@@ -121,7 +123,9 @@ video_path = "./model_saved/river_width_changes.mp4"
 # plt.show()
 
 # ani_real_dimensions.save(video_path, writer="ffmpeg", fps=15)
-ani_real_dimensions.save('./model_saved/animation.gif', writer='pillow', fps=10)
+# ani_real_dimensions.save('./model_saved/dkf_river_state.gif', writer='pillow', fps=10)
+# ani_real_dimensions.save('./model_saved/kf2_river_state.gif', writer='pillow', fps=10)
+ani_real_dimensions.save('./model_saved/kf_river_state.gif', writer='pillow', fps=10)
 
 # FFwriter = animation.FFMpegWriter(fps=10)
 # ani_real_dimensions.save(video_path, writer = FFwriter)

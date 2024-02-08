@@ -27,18 +27,21 @@ class RAPIDKF():
             self.load_pkl(dir_path)
         
     def load_pkl(self,dir_path):       
-        dis_name = 'load_coef.pkl'
+        dis_name = 'model_saved/dkf_load_coef.pkl'
         with open(os.path.join(dir_path, dis_name),'rb') as f:
             saved_dict = pickle.load(f)
         
-        self.Ae = saved_dict['Ae'] 
-        self.A0 = saved_dict['A0'] 
-        self.H = saved_dict['H'] 
-        self.P = saved_dict['P'] 
-        self.R = saved_dict['R'] 
-        self.u = saved_dict['u'] 
-        self.obs_data = saved_dict['obs_data'] 
-            
+        self.Ae = saved_dict['dkf_Ae'] 
+        self.A0 = saved_dict['dkf_A0'] 
+        self.S = saved_dict['dkf_H'] 
+        self.P = saved_dict['dkf_P'] 
+        self.R = saved_dict['dkf_R'] 
+        self.u = saved_dict['dkf_u'] 
+        self.obs_data = saved_dict['dkf_obs_data'] 
+        self.H = np.dot(self.S, self.Ae)
+        
+        dI = np.eye(self.P.shape[0]) * 0.0001 #avoid singularity 
+        self.P += dI        
             
     def load_file(self,dir_path):
         id_path = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
@@ -72,19 +75,19 @@ class RAPIDKF():
             }
     
         dataProcessor = PreProcessor()
-        self.Ae, self.A0, self.H, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
+        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
         
         saved_dict = {
-                'Ae': self.Ae,
-                'A0': self.A0,
-                'H': self.H,
-                'P': self.P,
-                'R': self.R,
-                'u': self.u,
-                'obs_data': self.obs_data,
+                'dkf_Ae': self.Ae,
+                'dkf_A0': self.A0,
+                'dkf_H': self.S,
+                'dkf_P': self.P,
+                'dkf_R': self.R,
+                'dkf_u': self.u,
+                'dkf_obs_data': self.obs_data,
             }
         
-        dis_name = 'load_coef.pkl'
+        dis_name = 'model_saved/dkf_load_coef.pkl'
         with open(os.path.join(dir_path, dis_name), 'wb') as f:
                 pickle.dump(saved_dict, f)
             
@@ -96,22 +99,24 @@ class RAPIDKF():
         kf_estimation = []
         discharge_estimation = []
         self.x = self.u[0]
-        print(f"state shape: {self.x.shape}")
+        
         infoKF_agents = []
-        dim_z_individual = 1
+        dim_z_individual = 36
         
         # Generate agents
         infoKF_agents = []
-        num_dec_agent = self.obs_data.shape[-1]
+        num_dec_agent = int(self.obs_data.shape[-1]/dim_z_individual)
         
         for i in range(num_dec_agent):
             H_i = self.H[i* dim_z_individual:((i+1)* dim_z_individual),:]
+            S_i = self.S[i* dim_z_individual:((i+1)* dim_z_individual),:]
             R_i = self.R[i* dim_z_individual:((i+1)* dim_z_individual),i* dim_z_individual:((i+1)* dim_z_individual)]
-            infoKF = InfoKalmanFilter(A = self.Ae, B = self.A0, H = H_i, R = R_i, P = self.P, x0 = self.u[0])
+            infoKF = InfoKalmanFilter(A = self.Ae, B = self.A0, H = H_i, S = S_i, R = R_i, P = self.P, x0 = self.u[0])
             infoKF_agents.append(infoKF)
             
         # Run simulation
         for timestep in range(self.days):
+            print(f"days: {timestep}")
             infoPlist = []
             infoPpredlist = []
             xlist = []
@@ -119,6 +124,7 @@ class RAPIDKF():
             
             ### Individual estimation
             for i_kf, agent in enumerate(infoKF_agents):
+                print(f"[est] id_agents: {i_kf}")
                 agent.predict(self.u[timestep])  
 
                 z_i = self.obs_data[timestep][i_kf*dim_z_individual:((i_kf+1)*dim_z_individual)]
@@ -129,11 +135,12 @@ class RAPIDKF():
                 xlist.append(x_broadcast_)
                 xpredlist.append(xpred)
                 
+                ##
+                # agent.update_discharge()
                 
             ### Fusion via information exchange
             for i_kf, agent in enumerate(infoKF_agents):
-                z_i = self.obs_data[timestep][i_kf*dim_z_individual:((i_kf+1)*dim_z_individual)]
-              
+                print(f"[broadcast] id_agents: {i_kf}")
                 agent.updateAfterCommunication(infoPlist,
                                                 infoPpredlist,
                                                 xlist,xpredlist
@@ -144,8 +151,10 @@ class RAPIDKF():
             kf_estimation.append(infoKF_agents[0].getState()) 
             discharge_estimation.append(infoKF_agents[0].getQ0()) 
 
+        np.savetxt("model_saved/dkf_discharge_est.csv", discharge_estimation, delimiter=",")
+        np.savetxt("model_saved/dkf_lateral_est.csv", kf_estimation, delimiter=",")
     
     
 if __name__ == '__main__':
-    rapid_kf = RAPIDKF(load_mode=0)
+    rapid_kf = RAPIDKF(load_mode=1)
     rapid_kf.simulateDKF()

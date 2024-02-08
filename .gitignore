@@ -11,3 +11,5 @@ delta.csv
 *.pyc
 model_saved
 test.py
+.vscode
+__pycache__

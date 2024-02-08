@@ -12,7 +12,7 @@ import scipy.sparse.linalg as splinalg
 from utility import PreProcessor
 import pickle
 
-## The state of this KF: lateral inflow
+## The state of this KF: discharge
 
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
@@ -93,24 +93,28 @@ class RAPIDKF():
             
     def simulate(self):
         kf_estimation = []
-        discharge_estimation = []
+        # discharge_estimation = []
         self.x = self.u[0]     #self.x is Qe
-        self.Q0 = np.zeros_like(self.u[0])
+        self.x = np.zeros_like(self.u[0])     #self.x is Qe
+        # self.Q0 = np.zeros_like(self.u[0])
+        self.P = np.dot(np.dot(self.Ae,self.P),self.Ae.T)
         print(f"state shape: {self.x.shape}")
-        print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
+        print(f"rank of P{np.linalg.matrix_rank(self.P)}, shapeL {self.P.shape}")
         for timestep in range(self.days):
             self.predict(self.u[timestep])
             self.update(self.obs_data[timestep])
-            self.update_discharge()
+            # self.update_discharge()
             kf_estimation.append(self.getState()) 
-            discharge_estimation.append(self.getQ0())
+            # discharge_estimation.append(self.getQ0())
 
-        np.savetxt("model_saved/discharge_est.csv", discharge_estimation, delimiter=",")
-        np.savetxt("model_saved/river_lateral_est.csv", kf_estimation, delimiter=",")
+        np.savetxt("model_saved/discharge_est_kf2.csv", kf_estimation, delimiter=",")
+        
         
     def predict(self,u=None):
         if u is not None:
-            self.x = u
+            self.x = np.dot(self.Ae,u) + np.dot(self.A0,self.x)
+        else:
+            self.x = np.dot(self.A0,self.x)
             
         # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
         self.timestep += 1
@@ -121,16 +125,17 @@ class RAPIDKF():
     def update(self, z, inputType=None):
         ### In RAPID model, inputType = None
         diag_R = 0.01*z**2
-        self.R = np.diag(diag_R)
+        self.R = np.diag(diag_R) 
         
-        z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
+        # z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
+        self.H = self.S 
         if inputType is not None:
             self.u, self.u_var = self.input_estimation(z)
             self.x = self.x + np.dot(self.B,self.u)
             innovation=  z - np.dot(self.H, self.x)
         else: 
             innovation = z - np.dot(self.H, self.x)
-        
+
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)

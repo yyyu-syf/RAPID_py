@@ -23,9 +23,9 @@ class RAPIDKF():
         self.days = 366 #2010 year 366 days
         self.month = self.days//365 * 12
         self.timestep = 0
-        if load_mode==0:
+        if load_mode==0 or load_mode == 2:
             self.load_file(dir_path)
-        else:
+        if load_mode==1 or load_mode == 2:
             self.load_pkl(dir_path)
         
     def load_pkl(self,dir_path):       
@@ -44,7 +44,8 @@ class RAPIDKF():
         
             
     def load_file(self,dir_path):
-        id_path = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
+        id_path = dir_path + '/rapid_data/rivid.csv'
+        id_path_sorted = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
         connect_path = dir_path + '/rapid_data/rapid_connect_San_Guad.csv'
         m3riv_path = dir_path + '/rapid_data/m3_riv.csv'
         m3riv_id_path = dir_path + '/rapid_data/m3_riv.csv'
@@ -57,6 +58,7 @@ class RAPIDKF():
         
         params = {
                 'id_path': id_path,
+                'id_path_sorted': id_path_sorted,
                 'connect_path': connect_path,
                 'm3riv_path': m3riv_path,
                 'm3riv_id_path': m3riv_id_path,
@@ -94,19 +96,22 @@ class RAPIDKF():
     def simulate(self):
         kf_estimation = []
         discharge_estimation = []
+        open_loop_x = []
         self.x = self.u[0]     #self.x is Qe
         self.Q0 = np.zeros_like(self.u[0])
         print(f"state shape: {self.x.shape}")
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
         for timestep in range(self.days):
-            self.predict(self.u[timestep])
-            self.update(self.obs_data[timestep])
+            x_predict = self.predict(self.u[timestep])
+            # self.update(self.obs_data[timestep])
             self.update_discharge()
             kf_estimation.append(self.getState()) 
             discharge_estimation.append(self.getQ0())
+            open_loop_x.append(self.getQ0())
 
         np.savetxt("model_saved/discharge_est.csv", discharge_estimation, delimiter=",")
         np.savetxt("model_saved/river_lateral_est.csv", kf_estimation, delimiter=",")
+        np.savetxt("model_saved/open_loop_river_lateral_est.csv", open_loop_x, delimiter=",")
         
     def predict(self,u=None):
         if u is not None:
@@ -132,6 +137,9 @@ class RAPIDKF():
             innovation = z - np.dot(self.H, self.x)
         
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
+        if np.linalg.matrix_rank(S) < S.shape[0]:
+            delta_S = 0.001*np.eye(S.shape[0])
+            S += delta_S
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P)   
@@ -172,7 +180,7 @@ class RAPIDKF():
     
     
 if __name__ == '__main__':
-    rapid_kf = RAPIDKF(load_mode=1)
+    rapid_kf = RAPIDKF(load_mode=2)
     rapid_kf.simulate()
     k=1
     x=0.35

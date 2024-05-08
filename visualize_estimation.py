@@ -21,15 +21,21 @@ def lat_lon_to_cartesian(lat, lon, lat_ref, lon_ref):
 
 
 file_path = './rapid_data/NHDFlowline_San_Guad/reach_info.csv'
-kf_path = './model_saved/dkf_discharge_est.csv'
 kf_path = './model_saved/discharge_est_kf2.csv'
+# kf_path = './model_saved/river_lateral_est.csv'
 kf_path = './model_saved/discharge_est.csv'
+kf_path = './model_saved/open_loop_river_lateral_est.csv'
 # kf_path = './model_saved/u.csv'
 kf_id_path = './rapid_data/rivid.csv'
 
 
 kf_data = pd.read_csv(kf_path, header=None)
 kf_id = pd.read_csv(kf_id_path, header=None).to_numpy()
+
+print(kf_data[0].shape)
+cutoff = 5000
+kf_data = kf_data[0:cutoff]
+kf_id = kf_id[0:cutoff]
 # column_names = ['id']
 # kf_id.columns = column_names
 widths  = kf_data.values
@@ -42,12 +48,19 @@ last_lat = river_data['End Latitude']
 last_long = river_data['End Longitude']
 lengths = river_data['Length (km)'].values
 
-# Normalize the widths by their daily maximum 
-normalized_widths = widths / np.max(widths, axis=0) * 5
-normalized_widths = widths 
+print(f"value.shape {widths.shape}")
 
-# # Above is only for testing,This is corrent:
-# normalized_widths = widths / np.max(widths)
+# # Above is only for testing,This is correct:
+# normalized_widths = widths / np.max(widths, axis=0) * 5
+normalized_widths = widths
+
+for frame in range(normalized_widths.shape[0]):
+    for i in range(normalized_widths.shape[1]):
+        if normalized_widths[frame, i] > 1e+10:
+            normalized_widths[frame, i] = 1e+10
+            
+normalized_widths = widths / np.max(widths) 
+            
 
 ref_lat = first_lat[0]
 ref_long = first_long[0]
@@ -65,9 +78,6 @@ def update_real_dimensions(frame):
     num_reaches = len(first_vertex_x_cartesian) # from shp file
     num_kf_reaches = len(kf_id) # from kf estimation
     num_widths = normalized_widths.shape[1]
-    
-    # import time
-    # time.sleep(1100)
 
     for i in range(num_kf_reaches):
         # find the corresponding index from shp id
@@ -82,14 +92,14 @@ def update_real_dimensions(frame):
 
             # Normalize the direction vector
             length = np.sqrt(dir_x**2 + dir_y**2)
-            dir_x /= length
-            dir_y /= length
+            # print(f"delta {lengths[id_shp] - length}")
+            # # length = 3e1
+            # dir_x /= length
+            # dir_y /= length
 
-            # Calculate the width for the current day, proportional to the length of the river reach
-            if normalized_widths[frame, i] > 1e+03:
-                normalized_widths[frame, i] = 1e+03
-
-            width = normalized_widths[frame, i] * lengths[id_shp]
+            # width = normalized_widths[frame, i] * lengths[id_shp]
+            width = normalized_widths[frame, i]
+            # print(width)
             
             # print(f"id_shp {id_shp} | id_kf = {id_kf} | i = {i} | width {width}")
             ### Plot reaches with actual width
@@ -119,7 +129,7 @@ def update_real_dimensions(frame):
 # Create an animation with real dimensions
 fig = plt.figure(figsize=(10, 10))
 ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=365, repeat=True)
-video_path = "./model_saved/river_width_changes.mp4"
+# video_path = "./model_saved/river_width_changes.mp4"
 # plt.show()
 
 # ani_real_dimensions.save(video_path, writer="ffmpeg", fps=15)

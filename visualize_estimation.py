@@ -26,7 +26,7 @@ kf_path = './model_saved/discharge_est_kf2.csv'
 kf_path = './model_saved/discharge_est.csv'
 kf_path = './model_saved/open_loop_river_lateral_est.csv'
 # kf_path = './model_saved/u.csv'
-kf_id_path = './rapid_data/rivid.csv'
+kf_id_path = './rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
 
 
 kf_data = pd.read_csv(kf_path, header=None)
@@ -53,13 +53,20 @@ print(f"value.shape {widths.shape}")
 # # Above is only for testing,This is correct:
 # normalized_widths = widths / np.max(widths, axis=0) * 5
 normalized_widths = widths
+# normalized_widths_safe = np.where(normalized_widths == 0, 1e-10, normalized_widths)
+# normalized_widths = np.log2(normalized_widths_safe)
+print(f"max widths { np.max(normalized_widths)} | index {np.argmax(np.array(normalized_widths))}")
+normalized_widths = normalized_widths / np.max(normalized_widths) 
 
-for frame in range(normalized_widths.shape[0]):
-    for i in range(normalized_widths.shape[1]):
-        if normalized_widths[frame, i] > 1e+10:
-            normalized_widths[frame, i] = 1e+10
+# for frame in range(normalized_widths.shape[0]):
+#     for i in range(normalized_widths.shape[1]):
+#         if normalized_widths[frame, i] < 0.01 :
+#             normalized_widths[frame, i] = 00.005
+#         if normalized_widths[frame, i] > 1e+10:
+#             normalized_widths[frame, i] = 1e+10
             
-normalized_widths = widths / np.max(widths) 
+            
+print(f"max widths after normalization { np.max(normalized_widths)}")
             
 
 ref_lat = first_lat[0]
@@ -99,7 +106,6 @@ def update_real_dimensions(frame):
 
             # width = normalized_widths[frame, i] * lengths[id_shp]
             width = normalized_widths[frame, i]
-            # print(width)
             
             # print(f"id_shp {id_shp} | id_kf = {id_kf} | i = {i} | width {width}")
             ### Plot reaches with actual width
@@ -130,7 +136,7 @@ def update_real_dimensions(frame):
 fig = plt.figure(figsize=(10, 10))
 ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=365, repeat=True)
 # video_path = "./model_saved/river_width_changes.mp4"
-# plt.show()
+plt.show()
 
 # ani_real_dimensions.save(video_path, writer="ffmpeg", fps=15)
 # ani_real_dimensions.save('./model_saved/dkf_river_state.gif', writer='pillow', fps=10)

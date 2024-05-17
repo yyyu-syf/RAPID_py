@@ -17,7 +17,7 @@ import pickle
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.epsilon = 0.001 #muksingum parameter threshold
+        self.epsilon = 0.0001 #muksingum parameter threshold
         self.radius = 20
         self.i_factor = 2.58 #enforced on covaraince P
         self.days = 366 #2010 year 366 days
@@ -35,6 +35,10 @@ class RAPIDKF():
         
         self.Ae = saved_dict['Ae'] 
         self.A0 = saved_dict['A0'] 
+        self.A4 = saved_dict['A4'] 
+        self.A5 = saved_dict['A5'] 
+        self.H1 = saved_dict['H1'] 
+        self.H2 = saved_dict['H2'] 
         self.S = saved_dict['S'] 
         self.P = saved_dict['P'] 
         self.R = saved_dict['R'] 
@@ -48,6 +52,7 @@ class RAPIDKF():
         id_path_sorted = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
         connect_path = dir_path + '/rapid_data/rapid_connect_San_Guad.csv'
         m3riv_path = dir_path + '/rapid_data/m3_riv.csv'
+        m3riv_d_path = dir_path + '/rapid_data/m3_d_riv.csv'
         m3riv_id_path = dir_path + '/rapid_data/m3_riv.csv'
         x_path = dir_path + '/rapid_data/x_San_Guad_2004_1.csv'
         k_path = dir_path + '/rapid_data/k_San_Guad_2004_1.csv'
@@ -61,6 +66,7 @@ class RAPIDKF():
                 'id_path_sorted': id_path_sorted,
                 'connect_path': connect_path,
                 'm3riv_path': m3riv_path,
+                'm3riv_d_path':m3riv_d_path,
                 'm3riv_id_path': m3riv_id_path,
                 'x_path': x_path,
                 'k_path': k_path,
@@ -77,11 +83,16 @@ class RAPIDKF():
             }
     
         dataProcessor = PreProcessor()
-        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
+        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data, \
+            self.A4, self.A5, self.H1, self.H2 = dataProcessor.pre_processing(**params)
         
         saved_dict = {
                 'Ae': self.Ae,
                 'A0': self.A0,
+                'A4': self.A4,
+                'A5': self.A5,
+                'H1': self.H1,
+                'H2': self.H2,
                 'S': self.S,
                 'P': self.P,
                 'R': self.R,
@@ -94,17 +105,26 @@ class RAPIDKF():
                 pickle.dump(saved_dict, f)
             
     def simulate(self):
+        
         kf_estimation = []
         discharge_estimation = []
         open_loop_x = []
         self.x = self.u[0]     #self.x is Qe
-        self.Q0 = np.zeros_like(self.u[0])
+        self.x = np.zeros_like(self.u[0])
+        
+        self.Q0 = np.ones_like(self.u[0]) *10
+        # self.Q0 = (self.u[0])
         print(f"state shape: {self.x.shape}")
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
         for timestep in range(self.days):
-            x_predict = self.predict(self.u[timestep])
+            if timestep <= 0:
+                x_predict = self.predict(self.u[timestep])
+            else:
+                x_predict = self.predict()
+                
             # self.update(self.obs_data[timestep])
             self.update_discharge()
+            
             kf_estimation.append(self.getState()) 
             discharge_estimation.append(self.getQ0())
             open_loop_x.append(self.getQ0())
@@ -116,10 +136,11 @@ class RAPIDKF():
     def predict(self,u=None):
         if u is not None:
             self.x = u
-            
+        else:
+            self.x = np.zeros_like(self.x)
+        
         # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
         self.timestep += 1
-        
         return self.x
     
     
@@ -146,8 +167,12 @@ class RAPIDKF():
 
     
     def update_discharge(self):
-        self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
-    
+        # self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
+        # p= 95
+        self.Q0 = self.H1 @ self.x + \
+                                self.H2 @ self.Q0
+        # self.Q0 = np.linalg.matrix_power(self.A4, p) @ self.Q0
+                                
     
     def input_estimation(self,z): 
         F = np.dot(self.H, self.B)
@@ -180,7 +205,7 @@ class RAPIDKF():
     
     
 if __name__ == '__main__':
-    rapid_kf = RAPIDKF(load_mode=2)
+    rapid_kf = RAPIDKF(load_mode=1)
     rapid_kf.simulate()
     k=1
     x=0.35

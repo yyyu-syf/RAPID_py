@@ -21,10 +21,11 @@ def lat_lon_to_cartesian(lat, lon, lat_ref, lon_ref):
 
 
 file_path = './rapid_data/NHDFlowline_San_Guad/reach_info.csv'
-kf_path = './model_saved/discharge_est_kf2.csv'
+# kf_path = './model_saved/discharge_est_kf2.csv'
 # kf_path = './model_saved/river_lateral_est.csv'
 kf_path = './model_saved/discharge_est.csv'
-kf_path = './model_saved/open_loop_river_lateral_est.csv'
+# kf_path = './model_saved/open_loop_river_lateral_est.csv'
+# kf_path = './model_saved/river_lateral_est.csv'
 # kf_path = './model_saved/u.csv'
 kf_id_path = './rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
 
@@ -33,7 +34,7 @@ kf_data = pd.read_csv(kf_path, header=None)
 kf_id = pd.read_csv(kf_id_path, header=None).to_numpy()
 
 print(kf_data[0].shape)
-cutoff = 5000
+cutoff = 5175
 kf_data = kf_data[0:cutoff]
 kf_id = kf_id[0:cutoff]
 # column_names = ['id']
@@ -56,14 +57,14 @@ normalized_widths = widths
 # normalized_widths_safe = np.where(normalized_widths == 0, 1e-10, normalized_widths)
 # normalized_widths = np.log2(normalized_widths_safe)
 print(f"max widths { np.max(normalized_widths)} | index {np.argmax(np.array(normalized_widths))}")
-normalized_widths = normalized_widths / np.max(normalized_widths) 
+normalized_widths = np.cbrt(normalized_widths / np.max(normalized_widths) *50)
 
-# for frame in range(normalized_widths.shape[0]):
-#     for i in range(normalized_widths.shape[1]):
-#         if normalized_widths[frame, i] < 0.01 :
-#             normalized_widths[frame, i] = 00.005
-#         if normalized_widths[frame, i] > 1e+10:
-#             normalized_widths[frame, i] = 1e+10
+for frame in range(normalized_widths.shape[0]):
+    for i in range(normalized_widths.shape[1]):
+        if normalized_widths[frame, i] < 0.01 :
+            normalized_widths[frame, i] = 00.005
+        if normalized_widths[frame, i] > 1e+10:
+            normalized_widths[frame, i] = 1e+10
             
             
 print(f"max widths after normalization { np.max(normalized_widths)}")
@@ -134,14 +135,14 @@ def update_real_dimensions(frame):
 
 # Create an animation with real dimensions
 fig = plt.figure(figsize=(10, 10))
-ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=365, repeat=True)
+ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=20, repeat=True)
 # video_path = "./model_saved/river_width_changes.mp4"
 plt.show()
 
 # ani_real_dimensions.save(video_path, writer="ffmpeg", fps=15)
 # ani_real_dimensions.save('./model_saved/dkf_river_state.gif', writer='pillow', fps=10)
 # ani_real_dimensions.save('./model_saved/kf2_river_state.gif', writer='pillow', fps=10)
-ani_real_dimensions.save('./model_saved/kf_river_state.gif', writer='pillow', fps=10)
+# ani_real_dimensions.save('./model_saved/kf_river_state.gif', writer='pillow', fps=3)
 
 # FFwriter = animation.FFMpegWriter(fps=10)
 # ani_real_dimensions.save(video_path, writer = FFwriter)

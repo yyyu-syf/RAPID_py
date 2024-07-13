@@ -80,7 +80,6 @@ class PreProcessor():
         lateral_daily = m3riv_data.to_numpy().reshape((self.days, 8, m3riv_data.shape[-1])).sum(axis=1)
         lateral_daily_averaged = lateral_daily/8
         lateral_daily_averaged_sorted = np.zeros_like(lateral_daily_averaged)
-        
         # lateral_daily_averaged = m3riv_d_data.to_numpy().reshape((self.days,m3riv_d_data.shape[-1]))
 
         for id_reach in reach_id:
@@ -202,9 +201,9 @@ class PreProcessor():
                         # up_row_index = river_network.index[condition].tolist()
                         up_row_index = np.where(condition)[0]
                         
-                        # Adjust indices if necessary
-                        print(f" row_index {row_index} | up_row_index {up_row_index}  \
-                            | reach_id_sorted {cur_id}   |  upstream_id {upstream_id}")
+                        # # Adjust indices if necessary
+                        # print(f" row_index {row_index} | up_row_index {up_row_index} | reach_id_sorted {cur_id}   |  upstream_id {upstream_id}")
+                    
                     if row_index < self.l_reach and up_row_index < self.l_reach:
                         connectivity_matrix_N[row_index, up_row_index] = 1
                     
@@ -300,10 +299,10 @@ class PreProcessor():
             # A0 += 1/96 * A4**p 
             A0 += 1/96 * np.linalg.matrix_power(A4, p)
         
-        self.H1 = np.zeros_like(self.Ae)
+        self.H1 = np.zeros_like(Ae)
         for p in np.arange(0,96):
-            self.H1 += np.dot(np.linalg.matrix_power(self.A4, p),self.A5)
-        self.H2 = np.linalg.matrix_power(self.A4, 96) #act on Q0
+            self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
+        self.H2 = np.linalg.matrix_power(A4, 96) #act on Q0
         
         self.Ae = Ae
         self.A0 = A0

@@ -12,20 +12,20 @@ import scipy.sparse.linalg as splinalg
 from utility import PreProcessor
 import pickle
 
-## The state of this KF: discharge
+## The state of this KF: lateral inflow
 
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.epsilon = 0.001 #muksingum parameter threshold
+        self.epsilon = 0.0001 #muksingum parameter threshold
         self.radius = 20
         self.i_factor = 2.58 #enforced on covaraince P
         self.days = 366 #2010 year 366 days
         self.month = self.days//365 * 12
         self.timestep = 0
-        if load_mode==0:
+        if load_mode==0 or load_mode == 2:
             self.load_file(dir_path)
-        else:
+        if load_mode==1 or load_mode == 2:
             self.load_pkl(dir_path)
         
     def load_pkl(self,dir_path):       
@@ -35,6 +35,10 @@ class RAPIDKF():
         
         self.Ae = saved_dict['Ae'] 
         self.A0 = saved_dict['A0'] 
+        self.A4 = saved_dict['A4'] 
+        self.A5 = saved_dict['A5'] 
+        self.H1 = saved_dict['H1'] 
+        self.H2 = saved_dict['H2'] 
         self.S = saved_dict['S'] 
         self.P = saved_dict['P'] 
         self.R = saved_dict['R'] 
@@ -44,9 +48,11 @@ class RAPIDKF():
         
             
     def load_file(self,dir_path):
-        id_path = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
+        id_path = dir_path + '/rapid_data/rivid.csv'
+        id_path_sorted = dir_path + '/rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
         connect_path = dir_path + '/rapid_data/rapid_connect_San_Guad.csv'
         m3riv_path = dir_path + '/rapid_data/m3_riv.csv'
+        m3riv_d_path = dir_path + '/rapid_data/m3_d_riv.csv'
         m3riv_id_path = dir_path + '/rapid_data/m3_riv.csv'
         x_path = dir_path + '/rapid_data/x_San_Guad_2004_1.csv'
         k_path = dir_path + '/rapid_data/k_San_Guad_2004_1.csv'
@@ -57,8 +63,10 @@ class RAPIDKF():
         
         params = {
                 'id_path': id_path,
+                'id_path_sorted': id_path_sorted,
                 'connect_path': connect_path,
                 'm3riv_path': m3riv_path,
+                'm3riv_d_path':m3riv_d_path,
                 'm3riv_id_path': m3riv_id_path,
                 'x_path': x_path,
                 'k_path': k_path,
@@ -75,11 +83,16 @@ class RAPIDKF():
             }
     
         dataProcessor = PreProcessor()
-        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data = dataProcessor.pre_processing(**params)
+        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data, \
+            self.A4, self.A5, self.H1, self.H2 = dataProcessor.pre_processing(**params)
         
         saved_dict = {
                 'Ae': self.Ae,
                 'A0': self.A0,
+                'A4': self.A4,
+                'A5': self.A5,
+                'H1': self.H1,
+                'H2': self.H2,
                 'S': self.S,
                 'P': self.P,
                 'R': self.R,
@@ -93,26 +106,43 @@ class RAPIDKF():
             
     def simulate(self):
         kf_estimation = []
-        # discharge_estimation = []
+        discharge_estimation = []
+        open_loop_x = []
         self.x = self.u[0]     #self.x is Qe
         self.x = np.zeros_like(self.u[0])     #self.x is Qe
-        # self.Q0 = np.zeros_like(self.u[0])
+        self.Q0 = np.zeros_like(self.u[0])
+        
+        ### Check the system observability
+        n = self.x.shape[0]
+        O_mat = self.H
+        for i in range(1, 5):
+            O_mat = np.vstack((O_mat, np.dot(self.S, np.linalg.matrix_power(self.Ae, i))))
+        rank_O = np.linalg.matrix_rank(O_mat)
+        
+        if rank_O < n:
+            print(f"rank of O: {rank_O} < n: {n}, system is not observable")
+        else:
+            print(f"rank of O: {rank_O} == n: {n}, system is observable")  
+        
         self.P = np.dot(np.dot(self.Ae,self.P),self.Ae.T)
         print(f"state shape: {self.x.shape}")
         print(f"rank of P{np.linalg.matrix_rank(self.P)}, shapeL {self.P.shape}")
         for timestep in range(self.days):
             self.predict(self.u[timestep])
             self.update(self.obs_data[timestep])
-            # self.update_discharge()
+            self.update_discharge()
             kf_estimation.append(self.getState()) 
-            # discharge_estimation.append(self.getQ0())
+            discharge_estimation.append(self.getQ0())
+            open_loop_x.append(self.getQ0())
 
         np.savetxt("model_saved/discharge_est_kf2.csv", kf_estimation, delimiter=",")
+        np.savetxt("model_saved/river_lateral_est2.csv", kf_estimation, delimiter=",")
+        np.savetxt("model_saved/open_loop_river_lateral_est2.csv", open_loop_x, delimiter=",")
         
         
     def predict(self,u=None):
         if u is not None:
-            self.x = np.dot(self.Ae,u) + np.dot(self.A0,self.x)
+            self.x = np.dot(self.Ae,u) + np.dot(self.A0,self.x) ?cuowu
         else:
             self.x = np.dot(self.A0,self.x)
             
@@ -143,7 +173,7 @@ class RAPIDKF():
 
     
     def update_discharge(self):
-        self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
+        self.Q0 = self.H1 @ self.x + self.H2 @ self.Q0
     
     
     def input_estimation(self,z): 

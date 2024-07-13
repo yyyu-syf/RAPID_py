@@ -105,22 +105,35 @@ class RAPIDKF():
                 pickle.dump(saved_dict, f)
             
     def simulate(self):
-        
         kf_estimation = []
         discharge_estimation = []
         open_loop_x = []
         self.x = self.u[0]     #self.x is Qe
         self.x = np.zeros_like(self.u[0])
         
-        self.Q0 = np.ones_like(self.u[0]) *10
-        # self.Q0 = (self.u[0])
+        ### Check the system observability
+        # n = self.x.shape[0]
+        # O_mat = self.H
+        # for i in range(1, n):
+        #     O_mat = np.vstack((O_mat, self.H))
+            
+        # rank_O = np.linalg.matrix_rank(O_mat)
+        
+        # if rank_O < n:
+        #     print(f"rank of O: {rank_O} < n: {n}, system is not observable")
+        # else:
+        #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
+                  
+        # self.Q0 = np.ones_like(self.u[0]) *10
+        self.Q0 = (self.u[0])
         print(f"state shape: {self.x.shape}")
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
         for timestep in range(self.days):
-            if timestep <= 0:
+            if timestep <= 10:
                 x_predict = self.predict(self.u[timestep])
             else:
                 x_predict = self.predict()
+            # x_predict = self.predict(self.u[timestep])
                 
             # self.update(self.obs_data[timestep])
             self.update_discharge()
@@ -159,7 +172,7 @@ class RAPIDKF():
         
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         if np.linalg.matrix_rank(S) < S.shape[0]:
-            delta_S = 0.001*np.eye(S.shape[0])
+            delta_S = 0.00001*np.eye(S.shape[0])
             S += delta_S
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)

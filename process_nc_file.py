@@ -7,7 +7,6 @@ dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_3H_
 # dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_ENS0125_M_utc.nc')
 dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_3H_utc.nc')
 
-
 # Create an empty DataFrame
 df = pd.DataFrame()
 

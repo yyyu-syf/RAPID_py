@@ -13,3 +13,5 @@ model_saved
 test.py
 .vscode
 __pycache__
+convert_discharge.py
+explore_shapefile.py

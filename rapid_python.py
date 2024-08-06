@@ -55,7 +55,9 @@ class RAPIDKF():
         m3riv_d_path = dir_path + '/rapid_data/m3_d_riv.csv'
         m3riv_id_path = dir_path + '/rapid_data/m3_riv.csv'
         x_path = dir_path + '/rapid_data/x_San_Guad_2004_1.csv'
+        # x_path = dir_path + '/rapid_data/xfac_San_Guad_0.1.csv'
         k_path = dir_path + '/rapid_data/k_San_Guad_2004_1.csv'
+        # k_path = dir_path + '/rapid_data/kfac_San_Guad_1km_hour.csv'
         obs_path = dir_path + '/rapid_data/Qobs_San_Guad_2010_2013_full.csv'
         obs_id_path = dir_path + '/rapid_data/obs_tot_id_San_Guad_2010_2013_full.csv'
         vic_model_path = dir_path + '/rapid_data/m3_riv_vic_month.csv'
@@ -129,13 +131,12 @@ class RAPIDKF():
         print(f"state shape: {self.x.shape}")
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
         for timestep in range(self.days):
-            if timestep <= 10:
+            if timestep <= 10000:
                 x_predict = self.predict(self.u[timestep])
             else:
                 x_predict = self.predict()
-            # x_predict = self.predict(self.u[timestep])
                 
-            # self.update(self.obs_data[timestep])
+            self.update(self.obs_data[timestep])
             self.update_discharge()
             
             kf_estimation.append(self.getState()) 
@@ -157,12 +158,33 @@ class RAPIDKF():
         return self.x
     
     
+    # def update(self, z, inputType=None):
+    #     ### In RAPID model, inputType = None
+    #     diag_R = 0.01*z**2
+    #     self.R = np.diag(diag_R)
+        
+    #     z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
+    #     if inputType is not None:
+    #         self.u, self.u_var = self.input_estimation(z)
+    #         self.x = self.x + np.dot(self.B,self.u)
+    #         innovation=  z - np.dot(self.H, self.x)
+    #     else: 
+    #         innovation = z - np.dot(self.H, self.x)
+        
+    #     S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
+    #     if np.linalg.matrix_rank(S) < S.shape[0]:
+    #         delta_S = 0.00001*np.eye(S.shape[0])
+    #         S += delta_S
+    #     K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
+    #     self.x = self.x + np.dot(K, innovation)
+    #     # self.P = self.P - np.dot(np.dot(K,self.H),self.P)   
+    
     def update(self, z, inputType=None):
         ### In RAPID model, inputType = None
         diag_R = 0.01*z**2
         self.R = np.diag(diag_R)
         
-        z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
+        # z = z - np.dot(self.S, np.dot(self.H2,self.Q0))
         if inputType is not None:
             self.u, self.u_var = self.input_estimation(z)
             self.x = self.x + np.dot(self.B,self.u)
@@ -176,15 +198,12 @@ class RAPIDKF():
             S += delta_S
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)
-        # self.P = self.P - np.dot(np.dot(K,self.H),self.P)   
-
+        # self.P = self.P - np.dot(np.dot(K,self.H),self.P) 
     
     def update_discharge(self):
         # self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
-        # p= 95
         self.Q0 = self.H1 @ self.x + \
                                 self.H2 @ self.Q0
-        # self.Q0 = np.linalg.matrix_power(self.A4, p) @ self.Q0
                                 
     
     def input_estimation(self,z): 
@@ -213,8 +232,6 @@ class RAPIDKF():
     
     def getQ0(self):
         return self.Q0
-    
-    
     
     
 if __name__ == '__main__':

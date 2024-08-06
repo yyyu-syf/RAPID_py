@@ -2,6 +2,8 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+from matplotlib.animation import FuncAnimation
 
 # Load the shapefile
 shp_path = "./rapid_data/NHDFlowline_San_Guad/NHDFlowline_San_Guad.shp"
@@ -32,29 +34,40 @@ shp_sub = shp_data[shp_data['strmOrder'] > 0]
 
 # Calculate global maximum discharge for color scaling
 Qcols = [col for col in shp_sub.columns if col.startswith('Q')]
-globQmax = shp_sub[Qcols].max().max()
+days = 366
+globQmax = shp_sub[Qcols[0:days]].max().max()
 
 # Set up color and line width gradients
 colfun = plt.cm.viridis
 lwdRamp = np.linspace(0.15, 12, 50)
 
-# Plot each time step
-for i, Qcol in enumerate(Qcols, start=1):
-    fig, ax = plt.subplots(1, 2, figsize=(12, 10), gridspec_kw={'width_ratios': [6, 1]})
+# Create a figure and axes
+fig, ax = plt.subplots(1, 2, figsize=(12, 10), gridspec_kw={'width_ratios': [6, 1]})
+
+# Function to update the plot
+def update(i):
+    ax[0].clear()
+    ax[1].clear()
     
     # Map plotting
+    Qcol = Qcols[i]
     Q = shp_sub[Qcol]
     norm = plt.Normalize(vmin=0, vmax=globQmax)
     colors = colfun(norm(Q))
     lwds = np.interp(Q, (0, globQmax), (0.15, 12))
     
     shp_sub.plot(ax=ax[0], color=colors, linewidth=lwds)
-    ax[0].set_title(f"Discharge at Day {i}")
+    ax[0].set_title(f"Discharge at Day {i+1}")
     
     # Color bar plotting
     sm = plt.cm.ScalarMappable(cmap=colfun, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, cax=ax[1])
     cbar.set_label("Q (cms)")
-    
-    plt.show()
+
+# Create animation
+# ani = FuncAnimation(fig, update, frames=len(Qcols), repeat=False)
+ani = FuncAnimation(fig, update, frames=days, repeat=False)
+
+plt.show()
+ani.save('./model_saved/kf_river_state_new.gif', writer='pillow', fps=3)

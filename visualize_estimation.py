@@ -86,7 +86,7 @@ def update_real_dimensions(frame):
     num_reaches = len(first_vertex_x_cartesian) # from shp file
     num_kf_reaches = len(kf_id) # from kf estimation
     num_widths = normalized_widths.shape[1]
-
+    
     for i in range(num_kf_reaches):
         # find the corresponding index from shp id
         id_kf = int(kf_id[i])
@@ -126,7 +126,7 @@ def update_real_dimensions(frame):
 
             # Plot the rectangle
             plt.fill([x1, x2, x3, x4], [y1, y2, y3, y4], 'b-')
-
+            # plt.text((x1 + x3) / 2, (y1 + y3) / 2, str(id_kf), color='red', fontsize=8, ha='center', va='center')
     plt.xlabel('X (meters)')
     plt.ylabel('Y (meters)')
     plt.title('River Width on Day {} (Real Dimensions)'.format(frame + 1))
@@ -135,7 +135,7 @@ def update_real_dimensions(frame):
 
 # Create an animation with real dimensions
 fig = plt.figure(figsize=(10, 10))
-ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=20, repeat=True)
+ani_real_dimensions = FuncAnimation(fig, update_real_dimensions, frames=50, repeat=True)
 # video_path = "./model_saved/river_width_changes.mp4"
 plt.show()
 

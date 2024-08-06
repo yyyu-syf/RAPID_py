@@ -78,7 +78,7 @@ class PreProcessor():
         
         ### process lateral inflow from 3-hourly to daily varaged
         lateral_daily = m3riv_data.to_numpy().reshape((self.days, 8, m3riv_data.shape[-1])).sum(axis=1)
-        lateral_daily_averaged = lateral_daily/8
+        lateral_daily_averaged = lateral_daily/8/3/3600
         lateral_daily_averaged_sorted = np.zeros_like(lateral_daily_averaged)
         # lateral_daily_averaged = m3riv_d_data.to_numpy().reshape((self.days,m3riv_d_data.shape[-1]))
 
@@ -96,6 +96,9 @@ class PreProcessor():
         self.musking_C1 = np.zeros(self.l_reach)
         self.musking_C2 = np.zeros(self.l_reach)
         self.musking_C3 = np.zeros(self.l_reach)
+        self.musking_C1_day = np.zeros(self.l_reach)
+        self.musking_C2_day = np.zeros(self.l_reach)
+        self.musking_C3_day = np.zeros(self.l_reach)
         
         if x_data.nunique().iloc[0] == 1:
             self.musking_x = np.full(self.l_reach,x_data.iloc[0, 0])
@@ -106,19 +109,30 @@ class PreProcessor():
                 self.musking_x[i] = x
         
         for i , k  in enumerate(k_data.values.reshape(-1)):
-            # self.musking_k[i] = k/60/60/24 #unit: s
             self.musking_k[i] = k #unit: s
+            
+            # idx = reach_id[i]
+            # condition = reach_id_sorted == idx
+            # sorted_idx = np.where(condition)[0]
+            # self.musking_k[sorted_idx] = k #unit: s
+            
         
         for i in range(len(k_data)):
             k = self.musking_k[i]
             x = self.musking_x[i]
             delta_t = 1 #s
             delta_t = 15*60 #15mins
+            # delta_t = 24*60*60 #1 day
             self.musking_C1[i], self.musking_C2[i], self.musking_C3[i] = self.calculate_Cs(k, x, delta_t)
+            delta_t_day = 24*60*60
+            self.musking_C1_day[i], self.musking_C2_day[i], self.musking_C3_day[i] = self.calculate_Cs(k, x, delta_t_day)
         
         self.musking_C1 = np.diag(self.musking_C1)
         self.musking_C2 = np.diag(self.musking_C2)
         self.musking_C3 = np.diag(self.musking_C3)
+        self.musking_C1_day = np.diag(self.musking_C1_day)
+        self.musking_C2_day = np.diag(self.musking_C2_day)
+        self.musking_C3_day = np.diag(self.musking_C3_day)
         
         # # Calculate connectivity matrix
         self.calculate_connectivity(connect_data,reach_id_sorted)
@@ -255,7 +269,6 @@ class PreProcessor():
         # Saving the plot with coordinates in high-resolution
         plt.savefig("model_saved/M_before.png", dpi=300, bbox_inches='tight')
         
-        
         A1_inv[A1_inv < self.epsilon] = 0
         np.savetxt("model_saved/M_after.csv", A1_inv, delimiter=",")
         plt.figure(figsize=(8, 8))
@@ -290,27 +303,51 @@ class PreProcessor():
         np.savetxt("model_saved/A5.csv", A5[0:100,0:100], delimiter=",")
         
         Ae = np.zeros((self.l_reach,self.l_reach))
-        for p in np.arange(0,96):
-            # Ae += np.dot((96-p)/96 * A4**p,A5) 
-            Ae += np.dot((96-p)/96 * np.linalg.matrix_power(A4, p),A5) 
+        n_96 = 96
+        for p in np.arange(0,n_96):
+            # Ae += np.dot((n_96-p)/n_96 * A4**p,A5) 
+            Ae += np.dot((n_96-p)/n_96 * np.linalg.matrix_power(A4, p),A5) 
         
         A0 = np.zeros((self.l_reach,self.l_reach))
-        for p in np.arange(1,97):
-            # A0 += 1/96 * A4**p 
-            A0 += 1/96 * np.linalg.matrix_power(A4, p)
+        for p in np.arange(1,n_96+1):
+            # A0 += 1/n_96 * A4**p 
+            A0 += 1/n_96 * np.linalg.matrix_power(A4, p)
         
-        self.H1 = np.zeros_like(Ae)
-        for p in np.arange(0,96):
-            self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
-        self.H2 = np.linalg.matrix_power(A4, 96) #act on Q0
+        # Using 15mins as basic evolvution time
+        # self.H1 = np.zeros_like(Ae)
+        # for p in np.arange(0,n_96):
+        #     self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
+        # self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
         
+        # Using day as basic evolution time
+        ### (I-C1N)^-1 ###
+        mat_I = np.identity(self.l_reach)
+        A1_day = mat_I - np.dot(self.musking_C1_day,self.N)
+        if np.linalg.matrix_rank(A1_day) < A1_day.shape[0]:
+            delta_A1 = 0.00001 * np.eye(A1_day.shape[0])
+            A1_day += delta_A1
+            print(f"Warning: A1 rank")
+        A1_inv_day = np.linalg.inv(A1_day)
+        ### C1+C2 ###
+        A2_day = self.musking_C1_day + self.musking_C2_day
+        ### C3+C2N ###
+        A3_day = self.musking_C3_day + np.dot(self.musking_C2_day,self.N)
+        
+        ### [I-C1N]^-1(C3+C2N)] ###
+        A4_day = np.dot(A1_inv_day,A3_day)
+        ### [I-C1N]^-1(C1+C2)] ###
+        A5_day = np.dot(A1_inv_day,A2_day)
+
+        self.H1 = A5_day
+        self.H2 = A4_day
+
         self.Ae = Ae
         self.A0 = A0
         self.A4 = A4
         self.A5 = A5
         
-        # self.Ae = sum(np.dot((96-p)/96 * A4**p,A5) for p in range(96))
-        # self.A0 = sum(1/96 * A4**p for p in np.arange(1,96))
+        # self.Ae = sum(np.dot((n_96-p)/n_96 * A4**p,A5) for p in range(n_96))
+        # self.A0 = sum(1/n_96 * A4**p for p in np.arange(1,n_96))
         
 
     def calculate_Cs(self,k, x, delta_t):

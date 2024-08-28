@@ -84,8 +84,7 @@ class PreProcessor():
 
         for id_reach in reach_id:
             idx = np.where(reach_id == id_reach)[0]
-            condition = reach_id_sorted == id_reach
-            sorted_idx = np.where(condition)[0]
+            sorted_idx = np.where(reach_id_sorted == id_reach)[0]
             lateral_daily_averaged_sorted[:,sorted_idx] = lateral_daily_averaged[:,idx] 
             
         print(f"lateral_daily data shape: {lateral_daily_averaged_sorted.shape} ")
@@ -103,7 +102,6 @@ class PreProcessor():
         if x_data.nunique().iloc[0] == 1:
             self.musking_x = np.full(self.l_reach,x_data.iloc[0, 0])
             print("All Muskinggum x are the same:", x_data.iloc[0, 0])
-            
         else:
             for i , x  in enumerate(x_data):
                 self.musking_x[i] = x
@@ -112,17 +110,15 @@ class PreProcessor():
             self.musking_k[i] = k #unit: s
             
             # idx = reach_id[i]
-            # condition = reach_id_sorted == idx
-            # sorted_idx = np.where(condition)[0]
+            # sorted_idx = np.where(reach_id_sorted == idx)[0]
             # self.musking_k[sorted_idx] = k #unit: s
             
         
         for i in range(len(k_data)):
             k = self.musking_k[i]
             x = self.musking_x[i]
-            delta_t = 1 #s
             delta_t = 15*60 #15mins
-            # delta_t = 24*60*60 #1 day
+            # delta_t = 3*60*60 #3hours
             self.musking_C1[i], self.musking_C2[i], self.musking_C3[i] = self.calculate_Cs(k, x, delta_t)
             delta_t_day = 24*60*60
             self.musking_C1_day[i], self.musking_C2_day[i], self.musking_C3_day[i] = self.calculate_Cs(k, x, delta_t_day)
@@ -147,14 +143,10 @@ class PreProcessor():
             index = np.where(reach_id_sorted == obs)[0]
             S[i, index] = 1
         
-        # He = np.dot(S,self.Ae)
-        # H0 = np.dot(S,self.A0)
-        H = S
-        non_zero_indices = np.nonzero(H)
-
-        # Print the indices
-        for coord in zip(*non_zero_indices):
-            print("Non-zero element at index:", coord)
+        # # Check the observation indices mapping
+        # non_zero_indices = np.nonzero(S)
+        # for coord in zip(*non_zero_indices):
+        #     print("Indices of Observation S matrix:", coord)
                 
         # R at initial state
         R0 = 0.1*obs_data.to_numpy()[0]
@@ -163,20 +155,17 @@ class PreProcessor():
         print(f"Dim of R: {R.shape}")
         
         # P and prune P based on radius
-        delta = abs((vic_data_m - ens_data_m).sum(axis=0)/12/30) #convert month->day
-        print(f"shape of delta:{delta.shape}")
+        #convert month->day -> second
+        delta = abs((vic_data_m - ens_data_m)).sum(axis=0)/self.days/24/3600
         P = self.i_factor * np.dot(delta.values.reshape(-1,1),delta.values.reshape(-1,1).T)
-        pruned_P = P
         pruned_P = self.pruneP(P,connect_data,self.radius,reach_id_sorted)
-        
         print(f"Dim of P: {P.shape}")
-        print(f"vic shape: {vic_data_m.shape}")
         
         np.savetxt("model_saved/k.csv", self.musking_k, delimiter=",")
         np.savetxt("model_saved/P_delta.csv", delta, delimiter=",")
         np.savetxt("model_saved/P.csv", P , delimiter=",")
         np.savetxt("model_saved/prunedP.csv", pruned_P , delimiter=",")
-        np.savetxt("model_saved/H.csv", H , delimiter=",")
+        np.savetxt("model_saved/S.csv", S , delimiter=",")
         np.savetxt("model_saved/R.csv", R, delimiter=",")
         np.savetxt("model_saved/z.csv", obs_data, delimiter=",")
         np.savetxt("model_saved/u.csv", lateral_daily_averaged_sorted, delimiter=",")
@@ -186,16 +175,14 @@ class PreProcessor():
         np.savetxt("model_saved/A5.csv", self.A5, delimiter=",")
         np.savetxt("model_saved/N.csv", self.N, delimiter=",")
         
-        return self.Ae, self.A0, H, pruned_P, R, lateral_daily_averaged_sorted, \
-            obs_data.to_numpy(), self.A4, self.A5, self.H1, self.H2
+        return self.Ae, self.A0, S, pruned_P, R, lateral_daily_averaged_sorted, \
+            obs_data.to_numpy(), self.A4, self.A5, self.H1, self.H2, self.H1_day, self.H2_day
         
         
-    def calculate_connectivity(self,connect_data,reach_id_sorted):
+    def calculate_connectivity(self,river_network,reach_id_sorted):
         column_names = ['id', 'downId', 'numUp', 'upId1','upId2','upId3','upId4']
-        connect_data.columns = column_names
-        # Sort the DataFrame by ID
-        # river_network = connect_data.sort_values(by='ID column name')
-        river_network = connect_data
+        river_network.columns = column_names
+        
         # Initialize the connectivity matrix
         connectivity_matrix_N = np.zeros((self.l_reach, self.l_reach), dtype=int)
 
@@ -203,21 +190,15 @@ class PreProcessor():
         for _, row in river_network.iterrows():
             cur_id = row[0]
             row_index = np.where(reach_id_sorted == cur_id)[0]
-            # check id:
             upStreamNum = 0
             for i in range(3, 6):  # Columns 4 to 7
                 upstream_id = row[i]
                 if upstream_id > 0:  # Check if the upstream ID is not 0
                     upStreamNum += 1
-                    # condition = river_network['id'] == upstream_id
                     condition = reach_id_sorted == upstream_id
                     if condition.any():
-                        # up_row_index = river_network.index[condition].tolist()
                         up_row_index = np.where(condition)[0]
                         
-                        # # Adjust indices if necessary
-                        # print(f" row_index {row_index} | up_row_index {up_row_index} | reach_id_sorted {cur_id}   |  upstream_id {upstream_id}")
-                    
                     if row_index < self.l_reach and up_row_index < self.l_reach:
                         connectivity_matrix_N[row_index, up_row_index] = 1
                     
@@ -226,11 +207,10 @@ class PreProcessor():
                 
         self.N = connectivity_matrix_N
         
-                # save the mask
+        # save the mask
         w = connectivity_matrix_N.shape[0]
         plt.figure(figsize=(8, 8))
         plt.imshow(connectivity_matrix_N, cmap='Greys', interpolation='none')
-        # plt.colorbar(label='Density')
         plt.title(f"Connectivity Density")
 
         # Adding axis ticks to show indices
@@ -240,7 +220,6 @@ class PreProcessor():
 
         # Saving the plot with coordinates in high-resolution
         plt.savefig("model_saved/connectivity.png", dpi=300, bbox_inches='tight')
-        
         
 
     def calculate_coefficient(self):
@@ -255,7 +234,7 @@ class PreProcessor():
             delta_A1 = 0.00001 * np.eye(A1.shape[0])
             A1 += delta_A1
             print(f"Warning: A1 rank")
-        print(f"Rank of A1 :{np.linalg.matrix_rank(A1)}, shape {A1.shape}")
+            
         A1_inv = np.linalg.inv(A1)
         np.savetxt("model_saved/M_before.csv", A1_inv, delimiter=",")
         w = A1_inv.shape[0]
@@ -285,16 +264,13 @@ class PreProcessor():
         A2 = self.musking_C1 + self.musking_C2
         
         ### C3+C2N ###
-        A3 = self.musking_C3 + np.dot(self.musking_C2,self.N)
-        # A3 = self.musking_C3 + self.musking_C2 @ self.N
+        A3 = self.musking_C3 + self.musking_C2 @ self.N
         
         ### [I-C1N]^-1(C3+C2N)] ###
-        A4 = np.dot(A1_inv,A3)
-        # A4 = A1_inv@A3
+        A4 = A1_inv@A3
         
         ### [I-C1N]^-1(C1+C2)] ###
-        A5 = np.dot(A1_inv,A2)
-        # A5 = A1_inv@A2
+        A5 = A1_inv@A2
         
         # ### Ae ###
         print(f"A4 shape {A4.shape}")
@@ -302,22 +278,14 @@ class PreProcessor():
         print(f"A5 shape {A5.shape}")
         np.savetxt("model_saved/A5.csv", A5[0:100,0:100], delimiter=",")
         
+        n_96 = 96 #96 if 15mins, 8 if 3hours
         Ae = np.zeros((self.l_reach,self.l_reach))
-        n_96 = 96
         for p in np.arange(0,n_96):
-            # Ae += np.dot((n_96-p)/n_96 * A4**p,A5) 
-            Ae += np.dot((n_96-p)/n_96 * np.linalg.matrix_power(A4, p),A5) 
-        
+            Ae += (n_96-p)/n_96 * np.linalg.matrix_power(A4, p) 
+        Ae = Ae @ A5
         A0 = np.zeros((self.l_reach,self.l_reach))
         for p in np.arange(1,n_96+1):
-            # A0 += 1/n_96 * A4**p 
             A0 += 1/n_96 * np.linalg.matrix_power(A4, p)
-        
-        # Using 15mins as basic evolvution time
-        # self.H1 = np.zeros_like(Ae)
-        # for p in np.arange(0,n_96):
-        #     self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
-        # self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
         
         # Using day as basic evolution time
         ### (I-C1N)^-1 ###
@@ -327,27 +295,40 @@ class PreProcessor():
             delta_A1 = 0.00001 * np.eye(A1_day.shape[0])
             A1_day += delta_A1
             print(f"Warning: A1 rank")
+            
         A1_inv_day = np.linalg.inv(A1_day)
+        A1_inv_day[A1_inv_day < self.epsilon] = 0
         ### C1+C2 ###
         A2_day = self.musking_C1_day + self.musking_C2_day
         ### C3+C2N ###
         A3_day = self.musking_C3_day + np.dot(self.musking_C2_day,self.N)
-        
         ### [I-C1N]^-1(C3+C2N)] ###
-        A4_day = np.dot(A1_inv_day,A3_day)
+        A4_day = A1_inv_day @ A3_day
         ### [I-C1N]^-1(C1+C2)] ###
-        A5_day = np.dot(A1_inv_day,A2_day)
-
-        self.H1 = A5_day
-        self.H2 = A4_day
+        A5_day = A1_inv_day @ A2_day
+        
+        self.H1_day = A5_day
+        self.H2_day = A4_day
+        
+        # Using 15mins as basic evolvution time
+        self.H1 = np.zeros_like(Ae)
+        for p in np.arange(0,n_96):
+            self.H1 += np.linalg.matrix_power(A4, p)
+            
+        self.H1 = self.H1 @ A5
+        self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
+        
+        # # Using 3hours as basic evolvution time
+        # n_96 = 8
+        # self.H1 = np.zeros_like(Ae)
+        # for p in np.arange(0,n_96):
+        #     self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
+        # self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
 
         self.Ae = Ae
         self.A0 = A0
         self.A4 = A4
         self.A5 = A5
-        
-        # self.Ae = sum(np.dot((n_96-p)/n_96 * A4**p,A5) for p in range(n_96))
-        # self.A0 = sum(1/n_96 * A4**p for p in np.arange(1,n_96))
         
 
     def calculate_Cs(self,k, x, delta_t):
@@ -371,6 +352,8 @@ class PreProcessor():
             
             downStreamId = row[0]
             # print(f" type  {river_network.index[river_network['id'] == upStreamId]}")
+            
+            # Downstream search
             for _ in range(radius):
                 condition = river_network['id'] == downStreamId
                 condition2 = reach_id_sorted == downStreamId 
@@ -382,7 +365,31 @@ class PreProcessor():
                     maskP[row_index,down_row_index2] = 1
                     maskP[down_row_index2,row_index] = 1
                     downStreamId = river_network.iloc[down_row_index]['downId'].tolist()[0]
-                
+                    
+            # Upstream search
+            upstream_queue = [(cur_id, 0)]  # Initialize the queue with the current reach and depth 0
+            visited = set()
+            while upstream_queue:
+                upStreamId, depth = upstream_queue.pop(0)
+                if depth >= radius:
+                    continue
+
+                condition = river_network['id'] == upStreamId
+                condition2 = reach_id_sorted == upStreamId
+                if condition2.any():
+                    up_row_index2 = np.where(condition2)[0]
+
+                    if row_index < self.l_reach and up_row_index2 < self.l_reach:
+                        maskP[row_index, up_row_index2] = 1
+                        maskP[up_row_index2, row_index] = 1
+
+                        if upStreamId not in visited:
+                            visited.add(upStreamId)
+                            numUp = river_network.loc[condition, 'numUp'].values[0]
+                            for i in range(1, numUp + 1):
+                                next_upStreamId = river_network.loc[condition, f'upId{i}'].values[0]
+                                if pd.notna(next_upStreamId):
+                                    upstream_queue.append((next_upStreamId, depth + 1))
         # save the mask
         w = P.shape[0]
         plt.figure(figsize=(8, 8))

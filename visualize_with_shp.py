@@ -69,5 +69,5 @@ def update(i):
 # ani = FuncAnimation(fig, update, frames=len(Qcols), repeat=False)
 ani = FuncAnimation(fig, update, frames=days, repeat=False)
 
-plt.show()
+# plt.show()
 ani.save('./model_saved/kf_river_state_new.gif', writer='pillow', fps=3)

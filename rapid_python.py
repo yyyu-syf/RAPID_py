@@ -11,14 +11,15 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
 from utility import PreProcessor
 import pickle
+import copy
 
 ## The state of this KF: lateral inflow
 
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.epsilon = 0.0001 #muksingum parameter threshold
-        self.radius = 20
+        self.epsilon = 0.0 #muksingum parameter threshold
+        self.radius = 25
         self.i_factor = 2.58 #enforced on covaraince P
         self.days = 366 #2010 year 366 days
         self.month = self.days//365 * 12
@@ -39,6 +40,8 @@ class RAPIDKF():
         self.A5 = saved_dict['A5'] 
         self.H1 = saved_dict['H1'] 
         self.H2 = saved_dict['H2'] 
+        self.H1_day = saved_dict['H1_day']
+        self.H2_day = saved_dict['H2_day']
         self.S = saved_dict['S'] 
         self.P = saved_dict['P'] 
         self.R = saved_dict['R'] 
@@ -55,9 +58,7 @@ class RAPIDKF():
         m3riv_d_path = dir_path + '/rapid_data/m3_d_riv.csv'
         m3riv_id_path = dir_path + '/rapid_data/m3_riv.csv'
         x_path = dir_path + '/rapid_data/x_San_Guad_2004_1.csv'
-        # x_path = dir_path + '/rapid_data/xfac_San_Guad_0.1.csv'
         k_path = dir_path + '/rapid_data/k_San_Guad_2004_1.csv'
-        # k_path = dir_path + '/rapid_data/kfac_San_Guad_1km_hour.csv'
         obs_path = dir_path + '/rapid_data/Qobs_San_Guad_2010_2013_full.csv'
         obs_id_path = dir_path + '/rapid_data/obs_tot_id_San_Guad_2010_2013_full.csv'
         vic_model_path = dir_path + '/rapid_data/m3_riv_vic_month.csv'
@@ -86,7 +87,7 @@ class RAPIDKF():
     
         dataProcessor = PreProcessor()
         self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data, \
-            self.A4, self.A5, self.H1, self.H2 = dataProcessor.pre_processing(**params)
+            self.A4, self.A5, self.H1, self.H2, self.H1_day, self.H2_day= dataProcessor.pre_processing(**params)
         
         saved_dict = {
                 'Ae': self.Ae,
@@ -95,6 +96,8 @@ class RAPIDKF():
                 'A5': self.A5,
                 'H1': self.H1,
                 'H2': self.H2,
+                'H1_day': self.H1_day,
+                'H2_day': self.H2_day,
                 'S': self.S,
                 'P': self.P,
                 'R': self.R,
@@ -112,7 +115,7 @@ class RAPIDKF():
         open_loop_x = []
         self.x = self.u[0]     #self.x is Qe
         self.x = np.zeros_like(self.u[0])
-        
+
         ### Check the system observability
         # n = self.x.shape[0]
         # O_mat = self.H
@@ -126,8 +129,8 @@ class RAPIDKF():
         # else:
         #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
                   
-        # self.Q0 = np.ones_like(self.u[0]) *10
-        self.Q0 = (self.u[0])
+        self.Q0 = np.zeros_like(self.u[0])
+        # self.Q0 = (self.u[0])
         print(f"state shape: {self.x.shape}")
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
         for timestep in range(self.days):
@@ -136,16 +139,16 @@ class RAPIDKF():
             else:
                 x_predict = self.predict()
                 
-            self.update(self.obs_data[timestep])
+            # self.update(self.obs_data[timestep])
             self.update_discharge()
-            
-            kf_estimation.append(self.getState()) 
-            discharge_estimation.append(self.getQ0())
-            open_loop_x.append(self.getQ0())
+                
+            kf_estimation.append(copy.deepcopy(self.getState())) 
+            discharge_estimation.append(copy.deepcopy(self.getQ0()))
+            open_loop_x.append(copy.deepcopy(self.getQ0()))
 
         np.savetxt("model_saved/discharge_est.csv", discharge_estimation, delimiter=",")
         np.savetxt("model_saved/river_lateral_est.csv", kf_estimation, delimiter=",")
-        np.savetxt("model_saved/open_loop_river_lateral_est.csv", open_loop_x, delimiter=",")
+        np.savetxt("model_saved/discharge_est_prediction.csv", open_loop_x, delimiter=",")
         
     def predict(self,u=None):
         if u is not None:
@@ -183,8 +186,9 @@ class RAPIDKF():
         ### In RAPID model, inputType = None
         diag_R = 0.01*z**2
         self.R = np.diag(diag_R)
+        # self.H = self.S @ self.H1
         
-        # z = z - np.dot(self.S, np.dot(self.H2,self.Q0))
+        # z = z - np.dot(self.S, np.dot(self.Ae,self.Q0))
         if inputType is not None:
             self.u, self.u_var = self.input_estimation(z)
             self.x = self.x + np.dot(self.B,self.u)
@@ -202,10 +206,45 @@ class RAPIDKF():
     
     def update_discharge(self):
         # self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
+        # print(f"{self.x[5043]} | {self.Q0[5043]}")
+        Q0_copied = copy.deepcopy(self.Q0)
+        
         self.Q0 = self.H1 @ self.x + \
                                 self.H2 @ self.Q0
+                            
                                 
-    
+        # Q0_t1 = self.H1_day @ self.x + \
+        #                         self.H2_day @ self.Q0
+                                
+        # Q0_t2 = self.A5 @ self.x + \
+        #                         self.A4 @ self.Q0
+        # print(f"Q0:{self.Q0[5043]} | Q0_t1:{Q0_t1[5043]} | Q0_t2:{Q0_t2[5043]}")
+        # Ae = self.Ae
+        # A4 = self.A4
+        # A5 = self.A5
+        # Q0 = copy.deepcopy(Q0_copied)
+        # for _ in range(95):
+        #     Q0 += A5 @ self.x + A4 @ Q0
+        #     print(f"Q0 tmp:{Q0[5043]}")
+        
+        # A4 = self.A4
+        # H1_temp = np.zeros_like(H1)
+        # n_96 = 96
+        # for p in np.arange(0,n_96):
+        #     H1_temp += np.linalg.matrix_power(A4, p)
+            
+        # H1_temp = H1_temp @ self.A5
+        # H2_temp = np.zeros_like(H2)
+        # H2_temp = np.linalg.matrix_power(self.A4, n_96) #act on Q0
+        
+        # # Q0_temp = H1_temp @ self.x + \
+        # #                         H2_temp @ Q0_copied
+        # print(f"Q0:{self.Q0[5043]} | Q0_t1:{Q0[5043]}")
+                       
+        # import time
+        # time.sleep(5)         
+
+                                
     def input_estimation(self,z): 
         F = np.dot(self.H, self.B)
         S = np.dot(np.dot(self.H,self.P),self.H.T)+self.R

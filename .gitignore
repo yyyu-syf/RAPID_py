@@ -15,3 +15,4 @@ test.py
 __pycache__
 convert_discharge.py
 explore_shapefile.py
+.DS_Store

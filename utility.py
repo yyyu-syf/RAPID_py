@@ -108,11 +108,6 @@ class PreProcessor():
         
         for i , k  in enumerate(k_data.values.reshape(-1)):
             self.musking_k[i] = k #unit: s
-            
-            # idx = reach_id[i]
-            # sorted_idx = np.where(reach_id_sorted == idx)[0]
-            # self.musking_k[sorted_idx] = k #unit: s
-            
         
         for i in range(len(k_data)):
             k = self.musking_k[i]

@@ -18,7 +18,7 @@ import copy
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.epsilon = 0.0 #muksingum parameter threshold
+        self.epsilon = 0.1 #muksingum parameter threshold
         self.radius = 25
         self.i_factor = 2.58 #enforced on covaraince P
         self.days = 366 #2010 year 366 days
@@ -207,19 +207,11 @@ class RAPIDKF():
     def update_discharge(self):
         # self.Q0 = np.dot(self.Ae,self.x) + np.dot(self.A0,self.Q0)
         # print(f"{self.x[5043]} | {self.Q0[5043]}")
-        Q0_copied = copy.deepcopy(self.Q0)
+        # Q0_copied = copy.deepcopy(self.Q0)
         
         self.Q0 = self.H1 @ self.x + \
                                 self.H2 @ self.Q0
-                            
                                 
-        # Q0_t1 = self.H1_day @ self.x + \
-        #                         self.H2_day @ self.Q0
-                                
-        # Q0_t2 = self.A5 @ self.x + \
-        #                         self.A4 @ self.Q0
-        # print(f"Q0:{self.Q0[5043]} | Q0_t1:{Q0_t1[5043]} | Q0_t2:{Q0_t2[5043]}")
-        # Ae = self.Ae
         # A4 = self.A4
         # A5 = self.A5
         # Q0 = copy.deepcopy(Q0_copied)
@@ -227,24 +219,10 @@ class RAPIDKF():
         #     Q0 += A5 @ self.x + A4 @ Q0
         #     print(f"Q0 tmp:{Q0[5043]}")
         
-        # A4 = self.A4
-        # H1_temp = np.zeros_like(H1)
-        # n_96 = 96
-        # for p in np.arange(0,n_96):
-        #     H1_temp += np.linalg.matrix_power(A4, p)
-            
-        # H1_temp = H1_temp @ self.A5
-        # H2_temp = np.zeros_like(H2)
-        # H2_temp = np.linalg.matrix_power(self.A4, n_96) #act on Q0
-        
-        # # Q0_temp = H1_temp @ self.x + \
-        # #                         H2_temp @ Q0_copied
-        # print(f"Q0:{self.Q0[5043]} | Q0_t1:{Q0[5043]}")
-                       
-        # import time
-        # time.sleep(5)         
 
-                                
+        # print(f"Q0:{self.Q0[5043]} | Q0_t1:{Q0[5043]}")
+
+               
     def input_estimation(self,z): 
         F = np.dot(self.H, self.B)
         S = np.dot(np.dot(self.H,self.P),self.H.T)+self.R

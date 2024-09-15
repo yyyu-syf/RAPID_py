@@ -127,18 +127,18 @@ class RAPIDKF():
         self.x = self.u[0]     #self.x is Qe
         self.x = np.zeros_like(self.u[0])
 
-        ## Check the system observability (commented out for now)
-        n = self.x.shape[0]
-        O_mat = self.H
-        for i in range(1, n):
-            O_mat = np.vstack((O_mat, self.H))
+        # ## Check the system observability (commented out for now)
+        # n = self.x.shape[0]
+        # O_mat = self.H
+        # for i in range(1, n):
+        #     O_mat = np.vstack((O_mat, self.H))
             
-        rank_O = np.linalg.matrix_rank(O_mat)
+        # rank_O = np.linalg.matrix_rank(O_mat)
         
-        if rank_O < n:
-            print(f"rank of O: {rank_O} < n: {n}, system is not observable")
-        else:
-            print(f"rank of O: {rank_O} == n: {n}, system is observable")  
+        # if rank_O < n:
+        #     print(f"rank of O: {rank_O} < n: {n}, system is not observable")
+        # else:
+        #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
                   
         self.Q0 = np.zeros_like(self.u[0])
         print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")

@@ -10,15 +10,15 @@ obs_data = pd.read_csv(obs_data_path, header=None)
 obs_reach_ids = pd.read_csv(obs_ids_path, header=None)
 
 # Load the open-loop simulated discharge data
-open_loop_data_path = './model_saved/discharge_est_prediction.csv'
+open_loop_data_path = './model_saved/discharge_est.csv'
 open_loop_data = pd.read_csv(open_loop_data_path, header=None)
 
 # Load the IDs for the open-loop simulation
 open_loop_ids_path = './rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
 open_loop_ids = pd.read_csv(open_loop_ids_path, header=None)
-
+days = 366+365+365+365 #2010 year 366 days
 # Extract the first 366 days from the observation data
-obs_data_366_days = obs_data.iloc[:366]
+obs_data_366_days = obs_data.iloc[:days]
 
 # Extract the list of open-loop IDs
 open_loop_ids_list = open_loop_ids[0].tolist()
@@ -29,7 +29,7 @@ obs_ids_list = obs_reach_ids[0].tolist()
 relevant_indices = [open_loop_ids_list.index(reach_id) for reach_id in obs_ids_list if reach_id in open_loop_ids_list]
 
 # Extract the relevant simulated data using the matched indices
-open_loop_data_relevant = open_loop_data.iloc[:366, relevant_indices]
+open_loop_data_relevant = open_loop_data.iloc[:days, relevant_indices]
 
 # Define a function to calculate NSE
 def calculate_nse(observed, simulated):
@@ -58,8 +58,7 @@ nse_csv_path = './figure/nse_values.csv'
 nse_df.to_csv(nse_csv_path, index=False)
 
 # Choose a few representative gauges for visualization
-selected_gauges = [1619595, 1620031, 1630223, 1631087, 1631099, 1639225]
-selected_gauges = [1639225,3840125]
+selected_gauges = [1619595, 1620031, 1630223, 1631087, 1631099, 1639225, 1639225,3840125]
 
 # Create and save hydrographs comparing observed and simulated discharge for the selected gauges
 for gauge_id in selected_gauges:

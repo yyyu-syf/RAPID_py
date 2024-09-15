@@ -17,9 +17,9 @@ class PreProcessor():
         
     def pre_processing(self,**kwargs):
         # Extracting parameters from the dictionary
-        id_path = kwargs['id_path'] 
+        id_path_unsorted = kwargs['id_path_unsorted'] 
         id_path_sorted = kwargs['id_path_sorted'] 
-        connect_path = kwargs['connect_path'] 
+        connectivity_path = kwargs['connectivity_path'] 
         m3riv_path = kwargs['m3riv_path'] 
         m3riv_d_path = kwargs['m3riv_d_path'] 
         x_path = kwargs['x_path'] 
@@ -35,9 +35,9 @@ class PreProcessor():
         self.i_factor = kwargs['i_factor'] 
         
         # Load data
-        reach_id = pd.read_csv(id_path, header=None)
+        reach_id_unsorted = pd.read_csv(id_path_unsorted, header=None)
         reach_id_sorted = pd.read_csv(id_path_sorted, header=None)
-        connect_data = pd.read_csv(connect_path, header=None)
+        connect_data = pd.read_csv(connectivity_path, header=None)
         m3riv_data = pd.read_csv(m3riv_path, header=None)
         m3riv_d_data = pd.read_csv(m3riv_d_path, header=None)
         x_data = pd.read_csv(x_path, header=None)
@@ -48,11 +48,8 @@ class PreProcessor():
         ens_data_m= pd.read_csv(ens_model_path, header=None)
         
         # cutoff data based on perference
-        print(f"m3riv_3hourly {m3riv_data.shape}")
-        print(f"m3riv_day {m3riv_d_data.shape}")
-        
         cutoff = len(reach_id_sorted) 
-        reach_id = reach_id[0:cutoff].to_numpy().flatten()
+        reach_id_unsorted = reach_id_unsorted[0:cutoff].to_numpy().flatten()
         reach_id_sorted = reach_id_sorted[0:cutoff]
         reach_id_sorted = reach_id_sorted.to_numpy().flatten()
         connect_data = connect_data[0:cutoff]
@@ -67,14 +64,9 @@ class PreProcessor():
         self.l_reach = x_data.shape[0]
         
         print(f"reach nums: {self.l_reach}")
-        print(f"m3riv_data {m3riv_data.shape}")
-        print(f"obs_id:  {obs_id.shape}")
-        # print(f"1st line of m3riv_data {m3riv_data.to_numpy()[0]}")
-        # print(f"1st line of obs_id {obs_id[0]}")
-        # print(f"1st line of reach_id {reach_id[0]}")
-        # print(f"1st line of connect_data {connect_data[0]}")
-        # print(f"1st line of k_data {k_data[0]}")
-        # print(f"1st line of obs_data {obs_data[0]}")
+        print(f"m3riv_data 3-hourly shape: {m3riv_data.shape}")
+        print(f"m3riv_daily shape: {m3riv_d_data.shape}")
+        print(f"obs num: {obs_id.shape}")
         
         ### process lateral inflow from 3-hourly to daily varaged
         lateral_daily = m3riv_data.to_numpy().reshape((self.days, 8, m3riv_data.shape[-1])).sum(axis=1)
@@ -82,8 +74,8 @@ class PreProcessor():
         lateral_daily_averaged_sorted = np.zeros_like(lateral_daily_averaged)
         # lateral_daily_averaged = m3riv_d_data.to_numpy().reshape((self.days,m3riv_d_data.shape[-1]))
 
-        for id_reach in reach_id:
-            idx = np.where(reach_id == id_reach)[0]
+        for id_reach in reach_id_unsorted:
+            idx = np.where(reach_id_unsorted == id_reach)[0]
             sorted_idx = np.where(reach_id_sorted == id_reach)[0]
             lateral_daily_averaged_sorted[:,sorted_idx] = lateral_daily_averaged[:,idx] 
             
@@ -104,16 +96,21 @@ class PreProcessor():
             print("All Muskinggum x are the same:", x_data.iloc[0, 0])
         else:
             for i , x  in enumerate(x_data):
-                self.musking_x[i] = x
+                idx = reach_id_unsorted[i]
+                condition = reach_id_sorted == idx
+                sorted_idx = np.where(condition)[0]
+                self.musking_x[sorted_idx] = x 
         
         for i , k  in enumerate(k_data.values.reshape(-1)):
-            self.musking_k[i] = k #unit: s
+            idx = reach_id_unsorted[i]
+            condition = reach_id_sorted == idx
+            sorted_idx = np.where(condition)[0]
+            self.musking_k[sorted_idx] = k #unit: s
         
         for i in range(len(k_data)):
             k = self.musking_k[i]
             x = self.musking_x[i]
             delta_t = 15*60 #15mins
-            # delta_t = 3*60*60 #3hours
             self.musking_C1[i], self.musking_C2[i], self.musking_C3[i] = self.calculate_Cs(k, x, delta_t)
             delta_t_day = 24*60*60
             self.musking_C1_day[i], self.musking_C2_day[i], self.musking_C3_day[i] = self.calculate_Cs(k, x, delta_t_day)
@@ -137,11 +134,6 @@ class PreProcessor():
         for i, obs in enumerate(obs_id):
             index = np.where(reach_id_sorted == obs)[0]
             S[i, index] = 1
-        
-        # # Check the observation indices mapping
-        # non_zero_indices = np.nonzero(S)
-        # for coord in zip(*non_zero_indices):
-        #     print("Indices of Observation S matrix:", coord)
                 
         # R at initial state
         R0 = 0.1*obs_data.to_numpy()[0]
@@ -150,7 +142,7 @@ class PreProcessor():
         print(f"Dim of R: {R.shape}")
         
         # P and prune P based on radius
-        #convert month->day -> second
+        # convert month->day -> second
         delta = abs((vic_data_m - ens_data_m)).sum(axis=0)/self.days/24/3600
         P = self.i_factor * np.dot(delta.values.reshape(-1,1),delta.values.reshape(-1,1).T)
         pruned_P = self.pruneP(P,connect_data,self.radius,reach_id_sorted)
@@ -223,37 +215,11 @@ class PreProcessor():
         '''
         ### (I-C1N)^-1 ###
         mat_I = np.identity(self.l_reach)
-        A1 = mat_I - np.dot(self.musking_C1,self.N)
-        # A1 = mat_I - self.musking_C1 @ self.N
-        if np.linalg.matrix_rank(A1) < A1.shape[0]:
-            delta_A1 = 0.00001 * np.eye(A1.shape[0])
-            A1 += delta_A1
-            print(f"Warning: A1 rank")
-            
+        A1 = mat_I - self.musking_C1 @ self.N
         A1_inv = np.linalg.inv(A1)
-        np.savetxt("model_saved/M_before.csv", A1_inv, delimiter=",")
-        w = A1_inv.shape[0]
-        plt.figure(figsize=(8, 8))
-        plt.imshow(A1_inv, cmap='Greys', interpolation='none')
-        plt.title(f"M before Density")
-        # Adding axis ticks to show indices
-        plt.xticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
-        plt.yticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
-        plt.grid(color='gray', linestyle='-', linewidth=0.5)
-        # Saving the plot with coordinates in high-resolution
-        plt.savefig("model_saved/M_before.png", dpi=300, bbox_inches='tight')
         
+        # filter all values less than epsilon
         A1_inv[A1_inv < self.epsilon] = 0
-        np.savetxt("model_saved/M_after.csv", A1_inv, delimiter=",")
-        plt.figure(figsize=(8, 8))
-        plt.imshow(A1_inv, cmap='Greys', interpolation='none')
-        plt.title(f"M before Density")
-        # Adding axis ticks to show indices
-        plt.xticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
-        plt.yticks(ticks=np.arange(0, w, w/10), labels=np.arange(0, w, w/10))
-        plt.grid(color='gray', linestyle='-', linewidth=0.5)
-        # Saving the plot with coordinates in high-resolution
-        plt.savefig("model_saved/M_after.png", dpi=300, bbox_inches='tight')
         
         ### C1+C2 ###
         A2 = self.musking_C1 + self.musking_C2
@@ -268,9 +234,7 @@ class PreProcessor():
         A5 = A1_inv@A2
         
         # ### Ae ###
-        print(f"A4 shape {A4.shape}")
         np.savetxt("model_saved/A4.csv", A4[0:100,0:100], delimiter=",")
-        print(f"A5 shape {A5.shape}")
         np.savetxt("model_saved/A5.csv", A5[0:100,0:100], delimiter=",")
         
         n_96 = 96 #96 if 15mins, 8 if 3hours
@@ -281,16 +245,24 @@ class PreProcessor():
         A0 = np.zeros((self.l_reach,self.l_reach))
         for p in np.arange(1,n_96+1):
             A0 += 1/n_96 * np.linalg.matrix_power(A4, p)
+            
+        # Using 15mins as basic evolvution time
+        self.H1 = np.zeros_like(Ae)
+        for p in np.arange(0,n_96):
+            self.H1 += np.linalg.matrix_power(A4, p)
+            
+        self.H1 = self.H1 @ A5
+        self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
+
+        self.Ae = Ae
+        self.A0 = A0
+        self.A4 = A4
+        self.A5 = A5    
         
         # Using day as basic evolution time
         ### (I-C1N)^-1 ###
         mat_I = np.identity(self.l_reach)
         A1_day = mat_I - np.dot(self.musking_C1_day,self.N)
-        if np.linalg.matrix_rank(A1_day) < A1_day.shape[0]:
-            delta_A1 = 0.00001 * np.eye(A1_day.shape[0])
-            A1_day += delta_A1
-            print(f"Warning: A1 rank")
-            
         A1_inv_day = np.linalg.inv(A1_day)
         A1_inv_day[A1_inv_day < self.epsilon] = 0
         ### C1+C2 ###
@@ -304,26 +276,6 @@ class PreProcessor():
         
         self.H1_day = A5_day
         self.H2_day = A4_day
-        
-        # Using 15mins as basic evolvution time
-        self.H1 = np.zeros_like(Ae)
-        for p in np.arange(0,n_96):
-            self.H1 += np.linalg.matrix_power(A4, p)
-            
-        self.H1 = self.H1 @ A5
-        self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
-        
-        # # Using 3hours as basic evolvution time
-        # n_96 = 8
-        # self.H1 = np.zeros_like(Ae)
-        # for p in np.arange(0,n_96):
-        #     self.H1 += np.dot(np.linalg.matrix_power(A4, p),A5)
-        # self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
-
-        self.Ae = Ae
-        self.A0 = A0
-        self.A4 = A4
-        self.A5 = A5
         
 
     def calculate_Cs(self,k, x, delta_t):

@@ -34,7 +34,7 @@ This repository contains three versions of the Kalman Filter implementation tail
    - **Description:** Directly follows the methodology outlined in the [referenced paper](https://journals.ametsoc.org/view/journals/hydr/21/3/jhm-d-19-0084.1.xml), with the state variable representing lateral inflows.
    - **Execution:** Run `python rapid_python.py` to perform the simulation.
 
-2. **Another Kalman Filter Implementation:**
+2. **Another Kalman Filter Implementation: (On developing)** 
 
    - **Description:** Similar to the first implementation but uses discharge of each reach as the state variable. This version integrates the discharge calculation process into the prediction step, contrasting with the basic implementation which requires separate discharge updates (refer to `.update_discharge()` function).
    - **Execution:** Run `python rapid_python_kf2.py` for simulation.
@@ -68,12 +68,12 @@ Before executing the scripts, standard routing data must be prepared. The datase
 To plot the geographical river network and gauge positions, use the following command:
 
 ```bash
-python visual_shp_file.py
+python visualize_with_shp.py
 ```
 To plot the animation of the changes of river flow, use this command to read and visilize the estimation in file `model_saved`:
 
 ```bash
-python visualize_estimation.py
+python evaluate_open_loop.py
 ```
 remember change the 'kf_path' to the path of your estimation. Specificly, `discharge_est.csv` is original KF, `discharge_est_kf2.csv` is the new KF, `dkf_discharge_est.csv` is the decentralized version. 
 

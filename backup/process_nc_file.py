@@ -19,10 +19,10 @@ print(f"***** rivid: {dataset.variables['rivid']}")
 # print(dataset.variables['m3_riv_err'])
 
 
-# Extract 'm3_riv' data and save to CSV
-m3_riv_data = dataset.variables['m3_riv'][:]
-m3_riv_df = pd.DataFrame(m3_riv_data)
-m3_riv_df.to_csv('./rapid_data/m3_riv_vic_month.csv', index=False)
+# # Extract 'm3_riv' data and save to CSV
+# m3_riv_data = dataset.variables['m3_riv'][:]
+# m3_riv_df = pd.DataFrame(m3_riv_data)
+# m3_riv_df.to_csv('./rapid_data/m3_riv_vic_month.csv', index=False)
 
 # # Extract 'rivid' data and save to CSV
 # comid_data = dataset.variables['rivid'][:]

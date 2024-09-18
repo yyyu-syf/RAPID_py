@@ -195,7 +195,7 @@ class RAPIDKF():
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P) 
     
     def update_discharge(self):
-        self.Q0 = self.H1_day @ self.x + self.H2_day @ self.Q0
+        self.Q0 = self.H1 @ self.x + self.H2 @ self.Q0
                
     def getState(self):
         return self.x

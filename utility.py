@@ -171,33 +171,44 @@ class PreProcessor():
         river_network.columns = column_names
         
         # Initialize the connectivity matrix
-        connectivity_matrix_N = np.zeros((self.l_reach, self.l_reach), dtype=int)
+        # connectivity_matrix_N = np.zeros((self.l_reach, self.l_reach), dtype=int)
+        connectivity_matrix_N_simple = np.zeros((self.l_reach, self.l_reach), dtype=int)
 
-        # Populate the matrix
+        # # Populate the matrix
+        # for _, row in river_network.iterrows():
+        #     cur_id = row[0]
+        #     row_index = np.where(reach_id_sorted == cur_id)[0]
+        #     upStreamNum = 0
+        #     for i in range(3, 6):  # Columns 4 to 7
+        #         upstream_id = row[i]
+        #         if upstream_id > 0:  # Check if the upstream ID is not 0
+        #             upStreamNum += 1
+        #             condition = reach_id_sorted == upstream_id
+        #             if condition.any():
+        #                 up_row_index = np.where(condition)[0]
+                        
+        #             if row_index < self.l_reach and up_row_index < self.l_reach:
+        #                 connectivity_matrix_N[row_index, up_row_index] = 1
+                    
+        #     if upStreamNum != row[2]:
+        #         print(f"Warning mismatrch, in table: {row[2]} | code: {upStreamNum}")
+                
+        # more efficient way
         for _, row in river_network.iterrows():
             cur_id = row[0]
-            row_index = np.where(reach_id_sorted == cur_id)[0]
-            upStreamNum = 0
-            for i in range(3, 6):  # Columns 4 to 7
-                upstream_id = row[i]
-                if upstream_id > 0:  # Check if the upstream ID is not 0
-                    upStreamNum += 1
-                    condition = reach_id_sorted == upstream_id
-                    if condition.any():
-                        up_row_index = np.where(condition)[0]
-                        
-                    if row_index < self.l_reach and up_row_index < self.l_reach:
-                        connectivity_matrix_N[row_index, up_row_index] = 1
-                    
-            if upStreamNum != row[2]:
-                print(f"Warning mismatrch, in table: {row[2]} | code: {upStreamNum}")
+            up_row_index = np.where(reach_id_sorted == cur_id)[0]
+            downstream_id = row[1]
+            row_index = np.where(reach_id_sorted == downstream_id)[0]
+            
+            if row_index < self.l_reach and up_row_index < self.l_reach:
+                connectivity_matrix_N_simple[row_index, up_row_index] = 1
                 
-        self.N = connectivity_matrix_N
+        self.N = connectivity_matrix_N_simple
         
         # save the mask
-        w = connectivity_matrix_N.shape[0]
+        w = connectivity_matrix_N_simple.shape[0]
         plt.figure(figsize=(8, 8))
-        plt.imshow(connectivity_matrix_N, cmap='Greys', interpolation='none')
+        plt.imshow(connectivity_matrix_N_simple, cmap='Greys', interpolation='none')
         plt.title(f"Connectivity Density")
 
         # Adding axis ticks to show indices

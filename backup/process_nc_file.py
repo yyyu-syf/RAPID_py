@@ -3,7 +3,7 @@ import pandas as pd
 
 # Open the NetCDF file
 dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_3H_utc_err_R286_D_scl.nc')
-dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_M_utc.nc')
+# dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_M_utc.nc')
 # dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_ENS0125_M_utc.nc')
 # dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_VIC0125_3H_utc.nc')
 # dataset = nc.Dataset('./rapid_data/m3_riv_San_Guad_20100101_20131231_ENS0125_D_utc.nc')
@@ -16,6 +16,8 @@ print(dataset.variables.keys())
 print(f"***** M3_RIV: {dataset.variables['m3_riv']}")
 # print(f"***** M3_RIV Error: {dataset.variables['m3_riv_err']}")
 print(f"***** rivid: {dataset.variables['rivid']}")
+print(f"***** time: {dataset.variables['time']}")
+print(f"***** time_bnds: {dataset.variables['time_bnds']}")
 # print(dataset.variables['m3_riv_err'])
 
 
@@ -33,6 +35,16 @@ print(f"***** rivid: {dataset.variables['rivid']}")
 # comid_data = dataset.variables['m3_riv_err'][:]
 # comid_df = pd.DataFrame(comid_data)
 # comid_df.to_csv('./rapid_data/m3_riv_err.csv', index=False)
+
+# # # Extract 'time' data and save to CSV
+# comid_data = dataset.variables['time'][:]
+# comid_df = pd.DataFrame(comid_data)
+# comid_df.to_csv('./rapid_data/time.csv', index=False)
+
+# # # Extract 'time_bnds' data and save to CSV
+# comid_data = dataset.variables['time_bnds'][:]
+# comid_df = pd.DataFrame(comid_data)
+# comid_df.to_csv('./rapid_data/time_bnds.csv', index=False)
 
 # # Close the dataset
 dataset.close()

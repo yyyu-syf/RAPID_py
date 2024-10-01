@@ -10,9 +10,10 @@ obs_data = pd.read_csv(obs_data_path, header=None)
 obs_reach_ids = pd.read_csv(obs_ids_path, header=None)
 
 # Load the open-loop simulated discharge data
-open_loop_data_path = './model_saved/discharge_est.csv'
+open_loop_data_path = './model_saved_official/discharge_est_offical.csv'
+open_loop_data_path = './model_saved_3hour/discharge_est.csv'
 open_loop_data = pd.read_csv(open_loop_data_path, header=None)
-
+print(f"open_loop_data {open_loop_data} with shape {open_loop_data.shape}")
 # Load the IDs for the open-loop simulation
 open_loop_ids_path = './rapid_data/riv_bas_id_San_Guad_hydroseq.csv'
 open_loop_ids = pd.read_csv(open_loop_ids_path, header=None)
@@ -63,6 +64,7 @@ selected_gauges = [1619595, 1620031, 1630223, 1631087, 1631099, 1639225, 1639225
 # Create and save hydrographs comparing observed and simulated discharge for the selected gauges
 for gauge_id in selected_gauges:
     plt.figure(figsize=(8, 5))
+    print(f"gauge_id {gauge_id} | {open_loop_ids_list.index(gauge_id)}")
     observed = obs_data_366_days.iloc[:,obs_ids_list.index(gauge_id)]    
     simulated = open_loop_data.iloc[:, open_loop_ids_list.index(gauge_id)]
     plt.plot(observed, label='Observed', color='green')

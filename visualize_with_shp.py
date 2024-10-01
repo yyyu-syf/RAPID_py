@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 shp_path = "./rapid_data/NHDFlowline_San_Guad/NHDFlowline_San_Guad.shp"
 shp_data = gpd.read_file(shp_path)
 
-# Load the discharge data without treating the first row as the header
+# Load the estimation of discharge data without treating the first row as the header
 discharge_data_path = "./model_saved/discharge_est.csv"
 discharge_data = pd.read_csv(discharge_data_path, header=None)
 
@@ -34,6 +34,7 @@ shp_sub = shp_data[shp_data['strmOrder'] > 0]
 
 # Calculate global maximum discharge for color scaling
 Qcols = [col for col in shp_sub.columns if col.startswith('Q')]
+
 days = 366
 globQmax = shp_sub[Qcols[0:days]].max().max()
 
@@ -66,7 +67,6 @@ def update(i):
     cbar.set_label("Q (cms)")
 
 # Create animation
-# ani = FuncAnimation(fig, update, frames=len(Qcols), repeat=False)
 ani = FuncAnimation(fig, update, frames=days, repeat=False)
 
 # plt.show()

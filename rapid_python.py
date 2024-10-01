@@ -18,7 +18,7 @@ import copy
 class RAPIDKF():
     def __init__(self, load_mode=0) -> None:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.epsilon = 0.1 #muksingum parameter threshold
+        self.epsilon = 0 #muksingum parameter threshold
         self.radius = 10
         self.i_factor = 2.58 #enforced on covaraince P
         self.days = 366+365+365+365 #2010 tp 2013 
@@ -30,12 +30,14 @@ class RAPIDKF():
             self.load_pkl(dir_path)
         
     def load_pkl(self,dir_path):       
-        dis_name = 'model_saved/load_coef.pkl'
+        dis_name = 'model_saved_3hour/load_coef.pkl'
         with open(os.path.join(dir_path, dis_name),'rb') as f:
             saved_dict = pickle.load(f)
         
         self.Ae = saved_dict['Ae'] 
-        self.A0 = saved_dict['A0'] 
+        self.A0 = saved_dict['A0']
+        self.Ae_day = saved_dict['Ae_day'] 
+        self.A0_day = saved_dict['A0_day'] 
         self.A4 = saved_dict['A4'] 
         self.A5 = saved_dict['A5'] 
         self.H1 = saved_dict['H1'] 
@@ -47,7 +49,6 @@ class RAPIDKF():
         self.R = saved_dict['R'] 
         self.u = saved_dict['u'] 
         self.obs_data = saved_dict['obs_data'] 
-        self.H = np.dot(self.S,self.Ae)
         
             
     def load_file(self,dir_path):
@@ -89,20 +90,25 @@ class RAPIDKF():
         # Corresponding to  Eq (6)&(7) in "Underlying fundamentals of kalman filtering for river network modeling"
         # A4 = [I-C1N]^-1(C3+C2N)] 
         # A5 = [I-C1N]^-1(C1+C2)] 
-        # Ae += (96-p)/96 * A4^p @ A5 where p from 0 to 95
-        # A0 += 1/96 * A4^p where p from 1 to 96
+        # Ae is for open loop simulation, Ae_day is for KF estimation
+        # Ae += (12-p)/12 * A4^p @ A5 where p from 0 to 11
+        # A0 += 1/12 * A4^p where p from 1 to 12
+        # Ae_day += (96-p)/96 * A4^p @ A5 where p from 0 to 95
+        # A0_day += 1/96 * A4^p where p from 1 to 96
         # H1 += A4^p @ A5 where p from 0 to 95
         # H2 = A4^96
         # H1_day and H2_day are designed for delta_t = 1 day, while H1&H2 are 15mins
         # H1_day = A5 
         # H2_day = A4 
         
-        self.Ae, self.A0, self.S, self.P, self.R, self.u, self.obs_data, \
+        self.Ae, self.A0, self.Ae_day, self.A0_day, self.S, self.P, self.R, self.u, self.obs_data, \
             self.A4, self.A5, self.H1, self.H2, self.H1_day, self.H2_day= dataProcessor.pre_processing(**params)
         
         saved_dict = {
                 'Ae': self.Ae,
                 'A0': self.A0,
+                'Ae_day': self.Ae_day,
+                'A0_day': self.A0_day,
                 'A4': self.A4,
                 'A5': self.A5,
                 'H1': self.H1,
@@ -116,22 +122,24 @@ class RAPIDKF():
                 'obs_data': self.obs_data,
             }
                 
-        dis_name = 'model_saved/load_coef.pkl'
+        dis_name = 'model_saved_3hour/load_coef.pkl'
         with open(os.path.join(dir_path, dis_name), 'wb') as f:
             pickle.dump(saved_dict, f)
             
-    def simulate(self):
+    def simulate(self, sim_mode = 0):
         kf_estimation = []
         discharge_estimation = []
         open_loop_x = []
-        self.x = self.u[0]     #self.x is Qe
-        self.x = np.zeros_like(self.u[0])
+        self.H = np.dot(self.S,self.Ae_day)
 
         # ## Check the system observability (commented out for now)
         # n = self.x.shape[0]
-        # O_mat = self.H
+        # O_mat = self.H 
+        # O_mat = self.S 
+        
         # for i in range(1, n):
-        #     O_mat = np.vstack((O_mat, self.H))
+        #     # O_mat = np.vstack((O_mat, self.H))
+        #     O_mat = np.vstack((O_mat, self.S @ np.linalg.matrix_power(self.Ae, i)))
             
         # rank_O = np.linalg.matrix_rank(O_mat)
         
@@ -141,23 +149,40 @@ class RAPIDKF():
         #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
                   
         self.Q0 = np.zeros_like(self.u[0])
-        print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
+        # print(f"rank of P:{np.linalg.matrix_rank(self.P)}, shape: {self.P.shape}")
+        
         for timestep in range(self.days):
-            if timestep <= 10000:
-                x_predict = self.predict(self.u[timestep])
-            else:
-                x_predict = self.predict()
+            discharge_ave = np.zeros_like(self.u[0])
+            self.x = np.zeros_like(self.u[0])
+            
+            ### For KF estimation, update the inflow every 3 hours
+            if sim_mode == 1:
+                n_evol = 8
+                for i in range(n_evol):
+                    self.x += self.u[timestep*n_evol + i]/n_evol
+                    
+                self.update(self.obs_data[timestep],timestep) 
                 
-            # self.update(self.obs_data[timestep]) #comment it out for open loop
-            self.update_discharge()
+                for i in range(n_evol):
+                    Q0_ave = self.update_discharge()
+                    discharge_ave += Q0_ave
+            elif sim_mode == 0:
+                ### For open loop, update the inflow every 3 hours
+                for i in range(n_evol):
+                    self.predict(self.u[timestep*n_evol + i])
+                    # Q0_ave = self.update_discharge(self.u[timestep*1 + i])
+                    Q0_ave = self.update_discharge()
+                    discharge_ave += Q0_ave
+            
+            discharge_ave = discharge_ave/n_evol
                 
             kf_estimation.append(copy.deepcopy(self.getState())) 
-            discharge_estimation.append(copy.deepcopy(self.getQ0()))
+            discharge_estimation.append(discharge_ave)
             open_loop_x.append(copy.deepcopy(self.getQ0()))
 
-        np.savetxt("model_saved/discharge_est.csv", discharge_estimation, delimiter=",")
-        np.savetxt("model_saved/river_lateral_est.csv", kf_estimation, delimiter=",")
-        np.savetxt("model_saved/open_loop_est.csv", open_loop_x, delimiter=",")
+        np.savetxt("model_saved_3hour/discharge_est.csv", discharge_estimation, delimiter=",")
+        np.savetxt("model_saved_3hour/river_lateral_est.csv", kf_estimation, delimiter=",")
+        np.savetxt("model_saved_3hour/open_loop_est.csv", open_loop_x, delimiter=",")
         
     def predict(self,u=None):
         if u is not None:
@@ -167,35 +192,34 @@ class RAPIDKF():
         
         # self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
         self.timestep += 1
-        return self.x
-    
-    def update(self, z, inputType=None):
+
+
+    def update(self, z, timestep, inputType=None):
         ### In RAPID model, inputType = None
         diag_R = 0.01*z**2
         self.R = np.diag(diag_R)
-        
-        # self.H = self.S @ self.H1_day
-        z = z - np.dot(self.S, np.dot(self.A0,self.Q0))
-        z = z - np.dot(self.S, np.dot(self.H2_day,self.Q0))
-        
-        if inputType is not None:
-            self.u, self.u_var = self.input_estimation(z)
-            self.x = self.x + np.dot(self.B,self.u)
-            innovation=  z - np.dot(self.H, self.x)
-        else: 
-            innovation = z - np.dot(self.H, self.x)
+        z = z - np.dot(self.S, np.dot(self.A0_day,self.Q0))
+        innovation = z - np.dot(self.H, self.x)
         
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
-        if np.linalg.matrix_rank(S) < S.shape[0]:
-            delta_S = 0.00001*np.eye(S.shape[0])
-            S += delta_S
-            print(f"warning: S is not full rank")
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))  
         self.x = self.x + np.dot(K, innovation)
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P) 
     
     def update_discharge(self):
-        self.Q0 = self.H1 @ self.x + self.H2 @ self.Q0
+        # ### 2
+        # self.Q0 = self.H1 @ self.x + self.H2 @ self.Q0
+        # Q0_ave = self.Q0
+        
+        ### 1 
+        Q0_ave = np.zeros_like(self.Q0)
+        for _ in range(12):
+            self.Q0 = self.A5 @ self.x + self.A4 @ self.Q0
+            Q0_ave += self.Q0 
+
+        Q0_ave = Q0_ave/12
+        
+        return Q0_ave
                
     def getState(self):
         return self.x
@@ -215,4 +239,4 @@ class RAPIDKF():
     
 if __name__ == '__main__':
     rapid_kf = RAPIDKF(load_mode=1)
-    rapid_kf.simulate()
+    rapid_kf.simulate(sim_mode=0)

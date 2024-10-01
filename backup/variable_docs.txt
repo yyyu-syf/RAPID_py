@@ -1,0 +1,82 @@
+con_csv: connectivity file path
+m3r_ncf: 3 houlry .nc file path
+kpr_csv: muksingum k file path
+xpr_csv: muksingum x file path
+bas_csv: sorted ID file path
+Qou_ncf: output .nc file path
+
+
+ZS_dtR: delta_t
+
+Data Type:
+I: Integer data type.
+Z: Real number (floating-point) data type (from Fortran notation where Z often denotes double precision or real numbers).
+Structure:
+S: Scalar (single value).
+V: Vector (one-dimensional array).
+M: Matrix (two-dimensional array or sparse matrix).
+Additional Prefixes:
+IM_: Could stand for "Integer Map" (i.e., a dictionary in Python).
+ZM_: Real number Matrix.
+IV_: Integer Vector.
+IS_: Integer Scalar.
+ZV_: Real number Vector.
+ZS_: Real number Scalar.
+
+### Function ### 
+
+con_vec: calculate connectivity function
+    return: 1. IV_riv_tot: ID vector
+            2. IV_dwn_tot: downstream ID vector
+
+bas_vec: read sorted ID file
+    return: IV_riv_bas: numpy dtype sorted ID
+
+hsh_tbl: hashing table
+    return: 1. IM_hsh_tot: map from ID to the index in IV_riv_tot 
+            2. IM_hsh_bas: map from ID to the index in sorted_ID IV_riv_bas  
+            3. IV_bas_tot: index is sorted_ID IV_riv_bas, value is index of IV_riv_tot
+
+net_mat: extened from con_vec, finish the connectivity N matrix
+    return:  ZM_Net: 
+             where IV_row: sorted ID row (downstream); IV_col: sorted ID col (upstream)
+
+k_x_vec: k and x matrices. 
+    return: 1. ZV_kpr_bas: muskingum k vector; 
+            2. ZV_xpr_bas: muskingum x vector
+
+ccc_mat: C1,C2,C3 matrices:
+    return: 1. ZM_C1m
+            2. ZM_C2m
+            3. ZM_C3m
+
+rte_mat: RAPID model coefficient matrices
+    return: 1. ZM_Lin: I - C1*N
+            2. ZM_Qex: C1 + C2
+            3. ZM_Qou: C3 + C2 * N
+
+m3r_mdt: read data from .nc file
+    return: 1. IV_m3r_tot: id in .nc
+            2. IV_m3r_tim: timestep in .nc
+            3. IM_m3r_tim: time period in .nc, [t0,t1]
+            4. IS_m3r_tim: len of time
+            5. ZS_TaR: delta t at .nc  3-hour: 10800
+
+stp_cor: check if delta_t in .nc is the same as ZS_dtR
+    return: IS_dtR: round(ZS_TaR/ZS_dtR). i.e. (10800/900 = 12)
+
+chk_top: check topology 
+
+chk_ids: check id in .nc is the same as ID file
+
+chk_tim: check timestep match
+
+Qou_mdt: creat Q out file and fill out necessary elements except discharge estimation
+
+mus_rte: routing prediction
+    return: 1. ZV_Qou_avg: Q evolve 15 times and averaged
+            2. ZV_Qou_fin: Q after evolves 15 times
+           (ZV_Qex_avg: Q_bar; ZV_rh1: first term; \
+           ZV_Qou: Q0; ZV_rhs: left term;
+           ZV_Qou: get prediction by spsolve_triangular;
+           ZV_avg: average of prediction in 3-hourly)

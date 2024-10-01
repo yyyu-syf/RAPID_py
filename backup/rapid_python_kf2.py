@@ -112,21 +112,21 @@ class RAPIDKF():
         self.x = np.zeros_like(self.u[0])     #self.x is Qe
         self.Q0 = np.zeros_like(self.u[0])
         
-        ### Check the system observability
-        n = self.x.shape[0]
-        O_mat = self.H
-        for i in range(1, 5):
-            O_mat = np.vstack((O_mat, np.dot(self.S, np.linalg.matrix_power(self.Ae, i))))
-        rank_O = np.linalg.matrix_rank(O_mat)
+        # ### Check the system observability
+        # n = self.x.shape[0]
+        # O_mat = self.H
+        # for i in range(1, 5):
+        #     O_mat = np.vstack((O_mat, np.dot(self.S, np.linalg.matrix_power(self.Ae, i))))
+        # rank_O = np.linalg.matrix_rank(O_mat)
         
-        if rank_O < n:
-            print(f"rank of O: {rank_O} < n: {n}, system is not observable")
-        else:
-            print(f"rank of O: {rank_O} == n: {n}, system is observable")  
+        # if rank_O < n:
+        #     print(f"rank of O: {rank_O} < n: {n}, system is not observable")
+        # else:
+        #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
         
-        self.P = np.dot(np.dot(self.Ae,self.P),self.Ae.T)
-        print(f"state shape: {self.x.shape}")
-        print(f"rank of P{np.linalg.matrix_rank(self.P)}, shapeL {self.P.shape}")
+        # self.P = np.dot(np.dot(self.Ae,self.P),self.Ae.T)
+        # print(f"state shape: {self.x.shape}")
+        # print(f"rank of P{np.linalg.matrix_rank(self.P)}, shapeL {self.P.shape}")
         for timestep in range(self.days):
             self.predict(self.u[timestep])
             self.update(self.obs_data[timestep])

@@ -69,16 +69,17 @@ class PreProcessor():
         print(f"obs num: {obs_id.shape}")
         
         ### process lateral inflow from 3-hourly to daily varaged
-        lateral_daily = m3riv_data.to_numpy().reshape((self.days, 8, m3riv_data.shape[-1])).sum(axis=1)
-        lateral_daily_averaged = lateral_daily/8/3/3600
+        # lateral_daily = m3riv_data.to_numpy().reshape((self.days,8, m3riv_data.shape[-1])).sum(axis=1)
+        lateral_daily = m3riv_data.to_numpy()
+        lateral_daily_averaged = lateral_daily/3/3600
         lateral_daily_averaged_sorted = np.zeros_like(lateral_daily_averaged)
-        # lateral_daily_averaged = m3riv_d_data.to_numpy().reshape((self.days,m3riv_d_data.shape[-1]))
 
         for id_reach in reach_id_unsorted:
             idx = np.where(reach_id_unsorted == id_reach)[0]
             sorted_idx = np.where(reach_id_sorted == id_reach)[0]
             lateral_daily_averaged_sorted[:,sorted_idx] = lateral_daily_averaged[:,idx] 
             
+        np.savetxt("model_saved_3hour/u.csv", lateral_daily_averaged_sorted, delimiter=",")
         print(f"lateral_daily data shape: {lateral_daily_averaged_sorted.shape} ")
         
         # process Muskinggum parameter
@@ -148,21 +149,21 @@ class PreProcessor():
         pruned_P = self.pruneP(P,connect_data,self.radius,reach_id_sorted)
         print(f"Dim of P: {P.shape}")
         
-        np.savetxt("model_saved/k.csv", self.musking_k, delimiter=",")
-        np.savetxt("model_saved/P_delta.csv", delta, delimiter=",")
-        np.savetxt("model_saved/P.csv", P , delimiter=",")
-        np.savetxt("model_saved/prunedP.csv", pruned_P , delimiter=",")
-        np.savetxt("model_saved/S.csv", S , delimiter=",")
-        np.savetxt("model_saved/R.csv", R, delimiter=",")
-        np.savetxt("model_saved/z.csv", obs_data, delimiter=",")
-        np.savetxt("model_saved/u.csv", lateral_daily_averaged_sorted, delimiter=",")
-        np.savetxt("model_saved/Ae.csv", self.Ae, delimiter=",")
-        np.savetxt("model_saved/A0.csv", self.A0, delimiter=",")
-        np.savetxt("model_saved/A4.csv", self.A4, delimiter=",")
-        np.savetxt("model_saved/A5.csv", self.A5, delimiter=",")
-        np.savetxt("model_saved/N.csv", self.N, delimiter=",")
+        np.savetxt("model_saved_3hour/k.csv", self.musking_k, delimiter=",")
+        np.savetxt("model_saved_3hour/P_delta.csv", delta, delimiter=",")
+        np.savetxt("model_saved_3hour/P.csv", P , delimiter=",")
+        np.savetxt("model_saved_3hour/prunedP.csv", pruned_P , delimiter=",")
+        np.savetxt("model_saved_3hour/S.csv", S , delimiter=",")
+        np.savetxt("model_saved_3hour/R.csv", R, delimiter=",")
+        np.savetxt("model_saved_3hour/z.csv", obs_data, delimiter=",")
+        np.savetxt("model_saved_3hour/u.csv", lateral_daily_averaged_sorted, delimiter=",")
+        np.savetxt("model_saved_3hour/Ae.csv", self.Ae, delimiter=",")
+        np.savetxt("model_saved_3hour/A0.csv", self.A0, delimiter=",")
+        np.savetxt("model_saved_3hour/A4.csv", self.A4, delimiter=",")
+        np.savetxt("model_saved_3hour/A5.csv", self.A5, delimiter=",")
+        np.savetxt("model_saved_3hour/N.csv", self.N, delimiter=",")
         
-        return self.Ae, self.A0, S, pruned_P, R, lateral_daily_averaged_sorted, \
+        return self.Ae, self.A0,self.Ae_day, self.A0_day, S, pruned_P, R, lateral_daily_averaged_sorted, \
             obs_data.to_numpy(), self.A4, self.A5, self.H1, self.H2, self.H1_day, self.H2_day
         
         
@@ -193,7 +194,7 @@ class PreProcessor():
         #     if upStreamNum != row[2]:
         #         print(f"Warning mismatrch, in table: {row[2]} | code: {upStreamNum}")
                 
-        # more efficient way
+        # More efficient way
         for _, row in river_network.iterrows():
             cur_id = row[0]
             up_row_index = np.where(reach_id_sorted == cur_id)[0]
@@ -217,7 +218,7 @@ class PreProcessor():
         plt.grid(color='gray', linestyle='-', linewidth=0.5)
 
         # Saving the plot with coordinates in high-resolution
-        plt.savefig("model_saved/connectivity.png", dpi=300, bbox_inches='tight')
+        plt.savefig("model_saved_3hour/connectivity.png", dpi=300, bbox_inches='tight')
         
 
     def calculate_coefficient(self):
@@ -229,8 +230,8 @@ class PreProcessor():
         A1 = mat_I - self.musking_C1 @ self.N
         A1_inv = np.linalg.inv(A1)
         
-        # filter all values less than epsilon
-        A1_inv[A1_inv < self.epsilon] = 0
+        # # filter all values less than epsilon
+        A1_inv[abs(A1_inv) < self.epsilon] = 0
         
         ### C1+C2 ###
         A2 = self.musking_C1 + self.musking_C2
@@ -243,27 +244,25 @@ class PreProcessor():
         
         ### [I-C1N]^-1(C1+C2)] ###
         A5 = A1_inv@A2
+        np.savetxt("model_saved_3hour/A4.csv", A4, delimiter=",")
+        np.savetxt("model_saved_3hour/A5.csv", A5, delimiter=",")]
         
         # ### Ae ###
-        np.savetxt("model_saved/A4.csv", A4[0:100,0:100], delimiter=",")
-        np.savetxt("model_saved/A5.csv", A5[0:100,0:100], delimiter=",")
-        
-        n_96 = 96 #96 if 15mins, 8 if 3hours
+        n_12 = 12 # 3hourly = 12*15mins
         Ae = np.zeros((self.l_reach,self.l_reach))
-        for p in np.arange(0,n_96):
-            Ae += (n_96-p)/n_96 * np.linalg.matrix_power(A4, p) 
+        for p in np.arange(0,n_12):
+            Ae += (n_12-p)/n_12 * np.linalg.matrix_power(A4, p) 
         Ae = Ae @ A5
         A0 = np.zeros((self.l_reach,self.l_reach))
-        for p in np.arange(1,n_96+1):
-            A0 += 1/n_96 * np.linalg.matrix_power(A4, p)
+        for p in np.arange(1,n_12+1):
+            A0 += 1/n_12 * np.linalg.matrix_power(A4, p)
             
-        # Using 15mins as basic evolvution time
         self.H1 = np.zeros_like(Ae)
-        for p in np.arange(0,n_96):
+        for p in np.arange(0,n_12):
             self.H1 += np.linalg.matrix_power(A4, p)
             
         self.H1 = self.H1 @ A5
-        self.H2 = np.linalg.matrix_power(A4, n_96) #act on Q0
+        self.H2 = np.linalg.matrix_power(A4, n_12) #act on Q0
 
         self.Ae = Ae
         self.A0 = A0
@@ -285,9 +284,19 @@ class PreProcessor():
         ### [I-C1N]^-1(C1+C2)] ###
         A5_day = A1_inv_day @ A2_day
         
+        n_96 = 96 # 1 day= 96*15mins
+        Ae_day = np.zeros((self.l_reach,self.l_reach))
+        for p in np.arange(0,n_96):
+            Ae_day += (n_96-p)/n_96 * np.linalg.matrix_power(A4, p) 
+        Ae_day = Ae_day @ A5
+        A0_day = np.zeros((self.l_reach,self.l_reach))
+        for p in np.arange(1,n_96+1):
+            A0_day += 1/n_96 * np.linalg.matrix_power(A4, p)
+        
         self.H1_day = A5_day
         self.H2_day = A4_day
-        
+        self.A0_day = A0_day
+        self.Ae_day = Ae_day
 
     def calculate_Cs(self,k, x, delta_t):
         # Calculate the values of C1, C2, and C3
@@ -361,7 +370,7 @@ class PreProcessor():
         plt.grid(color='gray', linestyle='-', linewidth=0.5)
 
         # Saving the plot with coordinates in high-resolution
-        plt.savefig("model_saved/density_P.png", dpi=300, bbox_inches='tight')
+        plt.savefig("model_saved_3hour/density_P.png", dpi=300, bbox_inches='tight')
         
         return P * maskP
             

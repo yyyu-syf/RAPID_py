@@ -19,14 +19,13 @@ import csv
 import netCDF4
 import numpy
 import os
-import copy
-import time
-from datetime import datetime, timezone
-from scipy.sparse import csc_matrix, diags, identity, linalg
-from scipy.sparse.linalg import spsolve, spsolve_triangular, factorized, splu
-import scipy.sparse.linalg as spla
-# from scikits.umfpack import splu as umlu
 import pandas as pd
+import time
+
+from datetime import datetime, timezone
+from scipy.sparse import csc_matrix, diags, identity
+from scipy.sparse.linalg import spsolve, spsolve_triangular, factorized, splu
+# from scikits.umfpack import splu as umlu
 
 
 # *****************************************************************************
@@ -47,17 +46,19 @@ ZS_dtR = 900
 
 Qou_ncf = '../output/Test/Qout_Test.nc'
 
+
 # -----------------------------------------------------------------------------
 # San_Guad_JHM
 # -----------------------------------------------------------------------------
 # inp_fld = '../input/San_Guad_JHM2/'
 # out_fld = '../output/San_Guad_JHM2/'
-dir_path =  '../rapid_data/'
+dir_path =  '../rapid_data_official/'
 inp_fld = dir_path 
 out_fld = dir_path
+
 con_csv = inp_fld + 'rapid_connect_San_Guad.csv'
 m3r_ncf = inp_fld + ('m3_riv_San_Guad_20100101_20131231_VIC0125_3H_utc_err_'
-                     'R286_D_scl.nc')
+                     'R286_D.nc')
 kpr_csv = inp_fld + 'k_San_Guad_2004_1.csv'
 xpr_csv = inp_fld + 'x_San_Guad_2004_1.csv'
 
@@ -285,7 +286,7 @@ def m3r_mdt(m3r_ncf):
     IS_m3r_tim = len(IV_m3r_tim)
     ZS_TaR = IM_m3r_tim[0, 1] - IM_m3r_tim[0, 0]
     # Using IM_m3r_tim rather than IV_m3r_tim which may have only one timestep
-    
+
     return IV_m3r_tot, IV_m3r_tim, IM_m3r_tim, IS_m3r_tim, ZS_TaR
 
 
@@ -471,24 +472,7 @@ def mus_rte(ZM_Lin, ZM_Qex, ZM_Qou, IS_dtR, ZV_Qou_ini, ZV_Qex_avg):
     ZV_Qou = ZV_Qou_ini
     ZV_avg = numpy.zeros(len(ZV_Qou_ini))
     ZV_rh1 = ZM_Qex * ZV_Qex_avg
-    
-    # # ZM_Lin_inv = spla.inv(ZM_Lin)
-    # ZM_Lin_inv_py = numpy.linalg.inv(ZM_Lin.toarray())
-    # ZM_Lin_inv_py = csc_matrix(ZM_Lin_inv_py)
-    # # print(numpy.array_equal(ZM_Lin_inv_py, ZM_Lin_inv.toarray()))
-    # # print(numpy.where(ZM_Lin_inv_py != ZM_Lin_inv.toarray()))
-    # # print(ZM_Lin_inv_py[25,17], ZM_Lin_inv.toarray()[25,17])    
-    # # print(f"*****")
-    # A5 = ZM_Lin_inv_py.dot(ZM_Qex)
-    # A4 = ZM_Lin_inv_py.dot(ZM_Qou)
-    # # numpy.savetxt("../model_saved/ZM_Lin_2.csv", ZM_Lin.toarray(), delimiter=",")
-    # # numpy.savetxt("../model_saved/ZM_Qex_2.csv", ZM_Qex.toarray(), delimiter=",")
-    # # numpy.savetxt("../model_saved/ZM_Qou_2.csv", ZM_Qou.toarray(), delimiter=",")
-    # # numpy.savetxt("../model_saved/ZM_Lin_inv_2.csv", ZM_Lin_inv.toarray(), delimiter=",")
-    # # numpy.savetxt("../model_saved/A4_2.csv", A4.toarray(), delimiter=",")
-    # # numpy.savetxt("../model_saved/A5_2.csv", A5.toarray(), delimiter=",")
-    # # print(f"A4 {A4.toarray()[0]} / {A5.toarray()[0]}")
-    time1 = time.time()
+
     for JS_dtR in range(IS_dtR):
         # ---------------------------------------------------------------------
         # Updating average before routing to remain in [0, IS_dtR - 1] range
@@ -509,14 +493,7 @@ def mus_rte(ZM_Lin, ZM_Qex, ZM_Qou, IS_dtR, ZV_Qou_ini, ZV_Qex_avg):
         # ZV_Qou = slv_fac(ZV_rhs)
         # ZV_Qou = slv_umf.solve(ZV_rhs)
         # ZV_Qou = slv_slu.solve(ZV_rhs)
-    time2 = time.time()
-    
-    # for _ in range(12):
-    #     ZV_Qou = A5@ZV_Qex_avg + A4@ZV_Qou
-    #     # print(f"ZV_Qou_fin: {ZV_Qou[1340]}")
-    # time3 = time.time()
-    
-    # print(f"time gap {time3-time2}")
+
     ZV_avg = ZV_avg / IS_dtR
 
     ZV_Qou_avg = ZV_avg
@@ -571,53 +548,56 @@ Qou_mdt(m3r_ncf, Qou_ncf, IV_bas_tot)
 # *****************************************************************************
 # Routing
 # *****************************************************************************
-# slv_fac = factorized(ZM_Lin)
-# slv_slu = splu(ZM_Lin)
+slv_fac = factorized(ZM_Lin)
+slv_slu = splu(ZM_Lin)
 # slv_umf = umlu(ZM_Lin)
 
 f = netCDF4.Dataset(m3r_ncf, 'r')
 g = netCDF4.Dataset(Qou_ncf, 'a')
 Qout = g.variables['Qout']
-divider = 8  
 discharge_estimation = []
-discharge_estimation_ave = []
-# for JS_m3r_tim in range(IS_m3r_tim//divider):
-for JS_m3r_tim in range(100):
+divider = 8  
+
+for JS_m3r_tim in range(IS_m3r_tim//divider):
     Z_ave_day = ZV_Qou_ini
     time1 = time.time()
-    
     for i in range(divider):
+        # ZV_Qex_avg = f.variables['m3_riv'][JS_m3r_tim][IV_bas_tot] / ZS_TaR
         ZV_Qex_avg = f.variables['m3_riv'][JS_m3r_tim*divider+i][IV_bas_tot] / ZS_TaR
+
         ZV_Qou_avg, ZV_Qou_fin = mus_rte(ZM_Lin, ZM_Qex, ZM_Qou, IS_dtR,
                                         ZV_Qou_ini, ZV_Qex_avg)
         ZV_Qou_ini = ZV_Qou_fin
-        Qout[JS_m3r_tim, :] = ZV_Qou_avg[:]
-        
-        Z_ave_day += ZV_Qou_avg
-    time2 = time.time()
-    print(f"day: {JS_m3r_tim} time: {time2-time1}")
 
-    discharge_estimation.append(copy.deepcopy(ZV_Qou_ini))
-    discharge_estimation_ave.append(Z_ave_day/divider)
+        Qout[JS_m3r_tim, :] = ZV_Qou_avg[:]
+
+        Z_ave_day += ZV_Qou_avg
+            
+    discharge_estimation.append(Z_ave_day/divider)
+    time2 = time.time()
     
+    print(f"day: {JS_m3r_tim} time: {time2-time1}")
+    
+    m3_riv_df = pd.DataFrame(ZM_Qex[0:100,0:100])
+    m3_riv_df.to_csv('../model_saved_official_original/ZM_Qex_official.csv', index=False)
+    m3_riv_df = pd.DataFrame(ZM_Qou[0:100,0:100])
+    m3_riv_df.to_csv('../model_saved_official_original/ZM_Qou_official.csv', index=False)
+    m3_riv_df = pd.DataFrame(ZM_Lin[0:100,0:100])
+    m3_riv_df.to_csv('../model_saved_official_original/ZM_Lin_official.csv', index=False)
     
 m3_riv_df = pd.DataFrame(ZM_Net.todense())
-m3_riv_df.to_csv('../model_saved_official/ZM_Net.csv', index=False)
-numpy.savetxt("../model_saved_official/discharge_est_offical.csv", discharge_estimation, delimiter=",")
-numpy.savetxt("../model_saved_official/discharge_est_ave.csv", discharge_estimation_ave, delimiter=",")
+m3_riv_df.to_csv('../model_saved_official_original/ZM_Net.csv', index=False)
+numpy.savetxt("../model_saved_official_original/discharge_est_offical.csv", discharge_estimation, delimiter=",")
 m3_riv_df = pd.DataFrame(ZM_C1m)
-m3_riv_df.to_csv('../model_saved_official/ZM_C1m.csv', index=False)
+m3_riv_df.to_csv('../model_saved_official_original/ZM_C1m.csv', index=False)
 m3_riv_df = pd.DataFrame(ZM_C2m)
-m3_riv_df.to_csv('../model_saved_official/ZM_C2m.csv', index=False)
+m3_riv_df.to_csv('../model_saved_official_original/ZM_C2m.csv', index=False)
 m3_riv_df = pd.DataFrame(ZM_C3m)
-m3_riv_df.to_csv('../model_saved_official/ZM_C3m.csv', index=False)
+m3_riv_df.to_csv('../model_saved_official_original/ZM_C3m.csv', index=False)
 Qout_df = pd.DataFrame(Qout[:])
-Qout_df.to_csv('../model_saved_official/Qout.csv', index=False)
+Qout_df.to_csv('../model_saved_official_original/Qout.csv', index=False)
 m3_riv_df = pd.DataFrame(f.variables['m3_riv'][:])
-m3_riv_df.to_csv('../model_saved_official/m3_riv_df.csv', index=False)
-
-# np.savetxt("../model_saved_official/discharge_est_offical.csv", np.array(Qout), delimiter=",")
-
+m3_riv_df.to_csv('../model_saved_official_original/m3_riv_df.csv', index=False)
 f.close()
 g.close()
 
@@ -625,21 +605,21 @@ g.close()
 # *****************************************************************************
 # Diagnosis
 # *****************************************************************************
-print(IS_m3r_tim)
-print(ZS_TaR)
-print(ZS_dtR)
-print(ZS_TaR/ZS_dtR)
-print(dir())
-print(ZM_Net.todense())
-print('-----')
-print(ZM_C1m)
-print('-----')
-print(ZM_C2m)
-print('-----')
-print(ZM_C3m)
-print('-----')
-print(ZM_ICN)
-print([name for name in globals() if not name.startswith('_')])
+# print(IS_m3r_tim)
+# print(ZS_TaR)
+# print(ZS_dtR)
+# print(ZS_TaR/ZS_dtR)
+# print(dir())
+# print(ZM_Net.todense())
+# print('-----')
+# print(ZM_C1m)
+# print('-----')
+# print(ZM_C2m)
+# print('-----')
+# print(ZM_C3m)
+# print('-----')
+# print(ZM_ICN)
+# print([name for name in globals() if not name.startswith('_')])
 
 
 # *****************************************************************************

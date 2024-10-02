@@ -201,6 +201,7 @@ class PreProcessor:
         """
         Calculates the dynamic coefficients Ae, A0, and related matrices.
         """
+        # Calculate 3hour-based dynamics coefficients
         mat_I = np.identity(self.l_reach)
         A1 = mat_I - self.musking_C1 @ self.N
         A1_inv = np.linalg.inv(A1)
@@ -302,12 +303,13 @@ class PreProcessor:
                 condition = river_network['id'] == downStreamId
                 condition2 = reach_id_sorted == downStreamId
                 if condition2.any():
+                    down_row_index = river_network.index[condition].tolist()
                     down_row_index2 = np.where(condition2)[0]
 
                 if row_index < self.l_reach and down_row_index2 < self.l_reach:
                     maskP[row_index, down_row_index2] = 1
                     maskP[down_row_index2, row_index] = 1
-                    downStreamId = river_network.iloc[river_network.index[condition].tolist()[0]]['downId']
+                    downStreamId = river_network.iloc[down_row_index]['downId'].tolist()[0]
 
             # Upstream search
             upstream_queue = [(cur_id, 0)]

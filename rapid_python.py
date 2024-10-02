@@ -32,16 +32,14 @@ class RAPIDKF:
             load_mode (int): Mode for loading data (0 = file, 1 = pickle, 2 = both).
         """
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        dir_path = os.path.join(dir_path, "model_saved_3hour")
-        self.dir_path = dir_path
+        self.sub_dir_path = "model_saved_3hour"
         # Create directory if it doesn't exist
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path, exist_ok=True)
+        if not os.path.exists(os.path.join(dir_path, "model_saved_3hour")):
+            os.makedirs(os.path.join(dir_path, "model_saved_3hour"), exist_ok=True)
         self.epsilon: float = 0  # Muskingum parameter threshold
         self.radius: int = 10
         self.i_factor: float = 2.58  # Enforced on covariance P
         self.days: int = 366 + 365 + 365 + 365  # 2010 to 2013
-        self.days: int = 366   # 2010 to 2013
         self.month: int = self.days // 365 * 12
         self.timestep: int = 0
         
@@ -57,7 +55,7 @@ class RAPIDKF:
         Args:
             dir_path (str): Directory path of the pickle file.
         """
-        dis_name = 'load_coef.pkl'
+        dis_name = os.path.join(self.sub_dir_path,'load_coef.pkl')
         with open(os.path.join(dir_path, dis_name), 'rb') as f:
             saved_dict: Dict[str, Any] = pickle.load(f)
         
@@ -146,7 +144,7 @@ class RAPIDKF:
             'obs_data': self.obs_data,
         }
 
-        dis_name = 'load_coef.pkl'
+        dis_name = os.path.join(self.sub_dir_path,'load_coef.pkl')
         with open(os.path.join(dir_path, dis_name), 'wb') as f:
             pickle.dump(saved_dict, f)
 
@@ -208,7 +206,8 @@ class RAPIDKF:
             open_loop_x.append(copy.deepcopy(self.get_discharge()))
 
         # Save results to the created directory
-        dir_path = self.dir_path
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dir_path = os.path.join(dir_path,self.sub_dir_path)
         np.savetxt(os.path.join(dir_path, "discharge_est.csv"), discharge_estimation, delimiter=",")
         np.savetxt(os.path.join(dir_path, "river_lateral_est.csv"), kf_estimation, delimiter=",")
         np.savetxt(os.path.join(dir_path, "open_loop_est.csv"), open_loop_x, delimiter=",")

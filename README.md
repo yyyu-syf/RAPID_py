@@ -1,82 +1,93 @@
-# Kalman Filtering for River Network Modeling
+# Modified Instructions for [RAPID_py: Kalman Filtering for River Network Modeling](https://github.com/milkytipo/RAPID_py)
 
-This repository implements Kalman Filter (KF) algorithms for river network simulation, as described in the paper: [Underlying Fundamentals of Kalman Filtering for River Network Modeling](https://journals.ametsoc.org/view/journals/hydr/21/3/jhm-d-19-0084.1.xml). The implementations are designed to facilitate simulation and analysis of river dynamics based on different state representations and assumptions.
+[Original README](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md)
 
 ## Getting Started
 
 ### Prerequisites
 
-Ensure you have [Conda](https://docs.conda.io/en/latest/) installed on your system to manage the environment and dependencies.
+As in the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md), ensure you have [Conda](https://docs.conda.io/en/latest/) installed on your system to manage the environment and dependencies.
 
 ### Installation
+
+Before beginning, navigate to the repository's `requirements.txt` file. The package versions listed here weren't all compatible for me, so I had to alter them slightly; what worked for me was to modify the `matplotlib-base` version to `3.6.2`.
+
+Then, as in the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md):
 
 1. **Create a Conda environment:**
 
    ```bash
-   conda create --name <env_name> python=3.x
+   conda create --name <env_name>
    conda activate <env_name>
    ```
 
 2. **Install the required libraries:**
 
-   Navigate to the repository's root directory and run:
+   Navigate to the repository's root directory.
+
+   For me, using `pip install -r requirements.txt` to install the required packages as per the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md) didn't work; instead I used:
 
    ```bash
-   pip install -r requirements.txt
+   conda install --file requirements.txt --channel conda-forge
    ```
+
+   **Alternatively, you can perform both steps 1 and 2 above at the same time using:**
+
+   From the root directory:
+
+   ```bash
+   conda create --name <env_name> --file requirements.txt --channel conda-forge
+   conda activate <env_name>
+   ```
+
+### Data Preparation
+
+As mentioned in the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md), before executing any scripts, we must first prepare/obtain the data.
+
+As the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md) explain, the [official dataset](https://zenodo.org/doi/10.5281/zenodo.3688690) is available from Zenodo, but it is **highly recommended** to use the quick access data provided by the original author(s) of this repository, as it allows for (almost; more on this later) all of the files required by the scripts to be quickly downloaded all at once for immediate use:
+
+Download this entire [Google Drive folder](https://drive.google.com/drive/folders/1nSMEgkIPLAxm3v53iAnoHCitFg82F7vR?usp=drive_link) provided by this repository's author(s), unzip the contents into a folder/directory named `rapid_data`, and place this folder/directory in the root directory of the repository. It's important that this folder/directory is exactly named `rapid_data`.
 
 ## Usage
 
-This repository contains three versions of the Kalman Filter implementation tailored for different modeling approaches:
+There are a few more things we must do before we can successfuly run the scripts.
+
+1. First, there are references in the code to a file in the dataset named `m3_d_riv.csv`. However, no such file exists, neither in the quick access data provided by the repository's author(s) nor in the official dataset on Zenodo. Thus, to be able to execute the code, we remove / comment out all references to this file (and references to objects that reference this file) in the code:
+
+   - In the file `rapid_python.py`, comment out line 111.
+   - In the file `utility.py`, comment out lines 32, 50, 67, and 73.
+
+2. Ensure that in line 285 of `rapid_python.py`, `load_mode` is set to `0`, so that the data load mode is set to file (`=0`), rather than pickle (`=1`) or both (`=2`).
+
+3. Finally, in line 286 of `rapid_python.py`, set sim_mode to either `0` or `1`, to set the simulation mode to open loop (`=0`) or Kalman Filter estimation (`=1`).
+
+**Now, we can finally execute the scripts.**
+
+As per the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md), there is currently only one Kalman Filter implementation / modeling approach (more are being developed):
 
 1. **Original Kalman Filter Implementation:**
 
    - **Description:** Directly follows the methodology outlined in the [referenced paper](https://journals.ametsoc.org/view/journals/hydr/21/3/jhm-d-19-0084.1.xml), with the state variable representing lateral inflows.
    - **Execution:** Run `python rapid_python.py` to perform the simulation.
 
-2. **Another Kalman Filter Implementation: (On developing)** 
-
-   - **Description:** Similar to the first implementation but uses discharge of each reach as the state variable. This version integrates the discharge calculation process into the prediction step, contrasting with the basic implementation which requires separate discharge updates (refer to `.update_discharge()` function).
-   - **Execution:** Run `python rapid_python_kf2.py` for simulation.
-
-3. **Decentralized Estimation:**
-
-   - **Status:** Currently under development.
-
-### Data Preparation
-
-Before executing the scripts, standard routing data must be prepared. The dataset includes:
-
-- **Official Dataset Location:** [Zenodo Link](https://zenodo.org/doi/10.5281/zenodo.3688690)
-- **Quick Access Data[Recommended!!!]:** A compressed file named 'rapid_data' is available for download from [Google Drive](https://drive.google.com/drive/folders/1nSMEgkIPLAxm3v53iAnoHCitFg82F7vR?usp=drive_link). Download and place this file in the root directory of the repository for immediate use (remember name it as rapid_data)
-
-#### Above dataset includes the following required Files:
-
-- **Reaches ID File:** `riv_bas_id_San_Guad_hydroseq.csv`, sorted from upstream to downstream.
-- **Muskingum Parameters:** `k_San_Guad_2004_1.csv` for each reach.
-- **Connectivity File:** `rapid_connect_San_Guad.csv`.
-- **Lateral Inflow Data:** Hourly/daily files, e.g., `m3_riv_San_Guad_20100101_20131231_VIC0125_3H_utc_err_R286_D_scl.nc`.
-- **Gauge Observations:** `obs_tot_id_San_Guad_2010_2013_full.csv`, `Qobs_San_Guad_2010_2013_full.csv`.
-- **Land Surface Models:** For uncertainty estimation, e.g., `m3_riv_San_Guad_20100101_20131231_ENS0125_M_utc.nc`.
-
-#### Optional:
-
-- **Shape Files:** For visualizing river networks, e.g., `StreamGageEvent_San_Guad_comid_withdir_full_2010_2013.zip`.
+The output generated by the execution of this `rapid_python.py` script will be located in a new directory in the root directory, named `model_saved_3hour`. Note: one of the files generated is `load_coef.pkl`, which, if we like, we can use to run `rapid_python.py` with `load_mode` set to `1` (pickle) or `2` (both file and pickle)!
 
 ### Visualizing River Networks
 
-To plot the geographical river network and gauge positions, use the following command:
+After completing the execution of `rapid_python.py` above, to be able to plot the geographical river network, create a directory named `model_saved` in the root directory, and place the file `discharge_est.csv` (located in the `model_saved_3hour` directory generated by the execution of `rapid_python.py`) into this `model_saved` directory.
+
+Now, as per the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md), to plot the geographical river network, use the following command:
 
 ```bash
 python visualize_with_shp.py
 ```
-To plot the animation of the changes of river flow, use this command to read and visilize the estimation in file `model_saved`:
+
+The output of the execution of this `visualize_with_shp.py` script will be in the `model_saved` directory.
+
+Finally, if you'd like to (graphically) plot the changes in river flow, as per the [original instructions](https://github.com/wentac4/RAPID_py/blob/master/ORIGINAL_README.md), use this command to visualize the estimation `discharge_est.csv`:
 
 ```bash
 python evaluate_open_loop.py
 ```
-remember change the 'kf_path' to the path of your estimation. Specificly, `discharge_est.csv` is original KF, `discharge_est_kf2.csv` is the new KF, `dkf_discharge_est.csv` is the decentralized version. 
 
-## Contributing
-
-We welcome contributions and suggestions to improve the implementations and documentation. Please refer to the issues section for pending enhancements or bug reports.
+The output of the execution of this `evaluate_open_loop.py` script will be in a new directory in the root directory, named `figure`.

@@ -29,7 +29,7 @@ class PreProcessor:
         id_path_sorted = kwargs['id_path_sorted']
         connectivity_path = kwargs['connectivity_path']
         m3riv_path = kwargs['m3riv_path']
-        m3riv_d_path = kwargs['m3riv_d_path']
+        # m3riv_d_path = kwargs['m3riv_d_path']
         x_path = kwargs['x_path']
         k_path = kwargs['k_path']
         obs_path = kwargs['obs_path']
@@ -47,7 +47,7 @@ class PreProcessor:
         reach_id_sorted = pd.read_csv(id_path_sorted, header=None).to_numpy().flatten()
         connect_data = pd.read_csv(connectivity_path, header=None)
         m3riv_data = pd.read_csv(m3riv_path, header=None)
-        m3riv_d_data = pd.read_csv(m3riv_d_path, header=None)
+        # m3riv_d_data = pd.read_csv(m3riv_d_path, header=None)
         x_data = pd.read_csv(x_path, header=None)
         k_data = pd.read_csv(k_path, header=None)
         obs_data = pd.read_csv(obs_path, header=None)
@@ -64,13 +64,13 @@ class PreProcessor:
         vic_data_m = vic_data_m.iloc[1:self.month+1, :cutoff]
         ens_data_m = ens_data_m.iloc[1:self.month+1, :cutoff]
         m3riv_data = m3riv_data.iloc[1:self.days*8+1, :cutoff]
-        m3riv_d_data = m3riv_d_data.iloc[1:self.days+1, :cutoff]
+        # m3riv_d_data = m3riv_d_data.iloc[1:self.days+1, :cutoff]
         obs_data = obs_data.iloc[:self.days]
         self.l_reach = x_data.shape[0]
 
         print(f"Number of reaches: {self.l_reach}")
         print(f"3-hourly m3riv_data shape: {m3riv_data.shape}")
-        print(f"Daily m3riv_data shape: {m3riv_d_data.shape}")
+        # print(f"Daily m3riv_data shape: {m3riv_d_data.shape}")
         print(f"Number of observations: {obs_id.shape}")
 
         # Process lateral inflow

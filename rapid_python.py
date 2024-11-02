@@ -1,3 +1,4 @@
+import itertools
 import os
 import pickle
 import copy
@@ -10,7 +11,8 @@ import geopandas as gpd
 from scipy.stats import multivariate_normal as scipy_gaussian
 from utility import PreProcessor
 from typing import Optional, Dict, Any
-
+from tqdm import tqdm
+from main import greedy_schedule
 class RAPIDKF:
     """
     Class for the Kalman Filter (KF) model used in river network modeling.
@@ -42,11 +44,17 @@ class RAPIDKF:
         self.days: int = 366 + 365 + 365 + 365  # 2010 to 2013
         self.month: int = self.days // 365 * 12
         self.timestep: int = 0
+
+        self.K = 2 #number of sensors to be selected
         
         if load_mode in [0, 2]:
             self.load_file(dir_path)
         if load_mode in [1, 2]:
             self.load_pkl(dir_path)
+
+        self.V_full = np.identity(self.S.shape[0])
+        self.S_g = []
+        print("finished init")
 
     def load_pkl(self, dir_path: str) -> None:
         """
@@ -55,10 +63,11 @@ class RAPIDKF:
         Args:
             dir_path (str): Directory path of the pickle file.
         """
+        print("loading")
         dis_name = os.path.join(self.sub_dir_path,'load_coef.pkl')
         with open(os.path.join(dir_path, dis_name), 'rb') as f:
             saved_dict: Dict[str, Any] = pickle.load(f)
-        
+        print("finished loading")
         self.Ae = saved_dict['Ae']
         self.A0 = saved_dict['A0']
         self.Ae_day = saved_dict['Ae_day']
@@ -108,7 +117,7 @@ class RAPIDKF:
             'id_path_sorted': os.path.join(dir_path, 'rapid_data/riv_bas_id_San_Guad_hydroseq.csv'),
             'connectivity_path': os.path.join(dir_path, 'rapid_data/rapid_connect_San_Guad.csv'),
             'm3riv_path': os.path.join(dir_path, 'rapid_data/m3_riv.csv'),
-            'm3riv_d_path': os.path.join(dir_path, 'rapid_data/m3_d_riv.csv'),
+            # 'm3riv_d_path': os.path.join(dir_path, 'rapid_data/m3_d_riv.csv'),
             'x_path': os.path.join(dir_path, 'rapid_data/x_San_Guad_2004_1.csv'),
             'k_path': os.path.join(dir_path, 'rapid_data/k_San_Guad_2004_1.csv'),
             'obs_path': os.path.join(dir_path, 'rapid_data/Qobs_San_Guad_2010_2013_full.csv'),
@@ -177,18 +186,32 @@ class RAPIDKF:
         #     print(f"rank of O: {rank_O} < n: {n}, system is not observable")
         # else:
         #     print(f"rank of O: {rank_O} == n: {n}, system is observable")  
-        
-        for timestep in range(self.days):
+        for timestep in tqdm(range(self.days)):
             discharge_avg = np.zeros_like(self.u[0])
             self.x = np.zeros_like(self.u[0])
             evolution_steps = 8  # Number of steps for each day
 
             if sim_mode == 1:
+                
+                sigma_greedy, s_greedy = greedy_schedule(
+                    A=self.Ae_day,
+                    C=self.H,
+                    W=np.identity(self.Ae_day.shape[0]),
+                    V=self.V_full,
+                    S0=self.P,
+                    K=self.K,
+                    l=1,  # Schedule for the current timestep only
+                )
+                selected_sensors = s_greedy[0]
+                with open("sigma.txt",'a') as f:
+                    f.write(f"{sigma_greedy}\n")
+                self.S_g.append(selected_sensors)
+
                 # Kalman Filter estimation (updates every 3 hours)
                 for i in range(evolution_steps):
                     self.x += self.u[timestep * evolution_steps + i] / evolution_steps
 
-                self.update(self.obs_data[timestep], timestep)
+                self.update(self.obs_data[timestep], timestep, selected_sensors)
 
                 for i in range(evolution_steps):
                     discharge_avg += self.update_discharge()
@@ -243,6 +266,36 @@ class RAPIDKF:
         self.x += np.dot(K, innovation)
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P) 
 
+    def update(self, z: np.ndarray, timestep: int, S: tuple) -> None:
+        """
+        Updates the Kalman Filter with new measurements from selected sensors.
+        
+        Args:
+            z (np.ndarray): Observation data.
+            timestep (int): Current timestep.
+            S (tuple): Selected sensor indices (1-based).
+        """
+        # Convert 1-based sensor indices to 0-based
+        S_zero_based = [sensor - 1 for sensor in S]
+        
+        # Select measurements from the selected sensors
+        z_selected = z[S_zero_based]
+        
+        # Build the measurement matrix for selected sensors
+        H_selected = self.H[S_zero_based, :]
+        
+        # Build the measurement noise covariance for selected sensors
+        V_selected = self.V_full[np.ix_(S_zero_based, S_zero_based)]
+        
+        # Compute the Kalman Gain
+        innovation = z_selected - H_selected @ self.x
+        S_matrix = V_selected + H_selected @ self.P @ H_selected.T
+        K = self.P @ H_selected.T @ np.linalg.inv(S_matrix)
+        
+        # Update the state estimate and covariance
+        self.x += K @ innovation
+        self.P = (np.eye(self.P.shape[0]) - K @ H_selected) @ self.P
+
     def update_discharge(self) -> np.ndarray:
         """
         Updates the discharge using the current state.
@@ -283,4 +336,4 @@ class RAPIDKF:
 
 if __name__ == '__main__':
     rapid_kf = RAPIDKF(load_mode=1)
-    rapid_kf.simulate(sim_mode=0)
+    rapid_kf.simulate(sim_mode=1)

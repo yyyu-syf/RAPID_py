@@ -13,6 +13,7 @@ from utility import PreProcessor
 from typing import Optional, Dict, Any
 from tqdm import tqdm
 from main import greedy_schedule
+from main import random_schedule
 class RAPIDKF:
     """
     Class for the Kalman Filter (KF) model used in river network modeling.
@@ -53,7 +54,7 @@ class RAPIDKF:
             self.load_pkl(dir_path)
 
         self.V_full = np.identity(self.S.shape[0])
-        self.S_g = []
+        self.S_selected = []
         print("finished init")
 
     def load_pkl(self, dir_path: str) -> None:
@@ -192,8 +193,8 @@ class RAPIDKF:
             evolution_steps = 8  # Number of steps for each day
 
             if sim_mode == 1:
-                
-                sigma_greedy, s_greedy = greedy_schedule(
+                # random schedule
+                sigma_random, s_random = random_schedule(
                     A=self.Ae_day,
                     C=self.H,
                     W=np.identity(self.Ae_day.shape[0]),
@@ -202,16 +203,29 @@ class RAPIDKF:
                     K=self.K,
                     l=1,  # Schedule for the current timestep only
                 )
-                selected_sensors = s_greedy[0]
-                with open("sigma.txt",'a') as f:
-                    f.write(f"{sigma_greedy}\n")
-                self.S_g.append(selected_sensors)
+                selected_sensors = s_random[0]
+                self.S_selected.append(selected_sensors)
+
+                # greedy schedule
+                # sigma_greedy, s_greedy = greedy_schedule(
+                #     A=self.Ae_day,
+                #     C=self.H,
+                #     W=np.identity(self.Ae_day.shape[0]),
+                #     V=self.V_full,
+                #     S0=self.P,
+                #     K=self.K,
+                #     l=1,  # Schedule for the current timestep only
+                # )
+                # selected_sensors = s_greedy[0]
+                # with open("sigma.txt",'a') as f:
+                #     f.write(f"{sigma_greedy}\n")
+                # self.S_selected.append(selected_sensors)
 
                 # Kalman Filter estimation (updates every 3 hours)
                 for i in range(evolution_steps):
                     self.x += self.u[timestep * evolution_steps + i] / evolution_steps
 
-                self.update(self.obs_data[timestep], timestep, selected_sensors)
+                self.update_selected(self.obs_data[timestep], timestep, selected_sensors)
 
                 for i in range(evolution_steps):
                     discharge_avg += self.update_discharge()
@@ -266,7 +280,8 @@ class RAPIDKF:
         self.x += np.dot(K, innovation)
         # self.P = self.P - np.dot(np.dot(K,self.H),self.P) 
 
-    def update(self, z: np.ndarray, timestep: int, S: tuple) -> None:
+    ### need to double check the math equations 
+    def update_selected(self, z: np.ndarray, timestep: int, S: tuple) -> None:
         """
         Updates the Kalman Filter with new measurements from selected sensors.
         

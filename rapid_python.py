@@ -55,6 +55,7 @@ class RAPIDKF:
 
         self.V_full = np.identity(self.S.shape[0])
         self.S_selected = []
+        self.cov_trace = []
         print("finished init")
 
     def load_pkl(self, dir_path: str) -> None:
@@ -241,14 +242,28 @@ class RAPIDKF:
             kf_estimation.append(copy.deepcopy(self.get_state()))
             discharge_estimation.append(discharge_avg)
             open_loop_x.append(copy.deepcopy(self.get_discharge()))
-
+            self.cov_trace.append(np.trace(self.P))
         # Save results to the created directory
         dir_path = os.path.dirname(os.path.realpath(__file__))
         dir_path = os.path.join(dir_path,self.sub_dir_path)
         np.savetxt(os.path.join(dir_path, "discharge_est.csv"), discharge_estimation, delimiter=",")
         np.savetxt(os.path.join(dir_path, "river_lateral_est.csv"), kf_estimation, delimiter=",")
         np.savetxt(os.path.join(dir_path, "open_loop_est.csv"), open_loop_x, delimiter=",")
-        
+        self.plot_covariance_trace()
+    
+    def plot_covariance_trace(self) -> None:
+        """
+        Plots the trace of the covariance matrix over timesteps.
+        """
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, len(self.cov_trace) + 1), self.cov_trace, marker='o', linestyle='-')
+        plt.xlabel('Timestep')
+        plt.ylabel('Trace of Covariance Matrix (trace(P))')
+        plt.title('Covariance Trace vs. Timestep')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()    
+    
     def predict(self, u: Optional[np.ndarray] = None) -> None:
         """
         Predicts the next state of the system.

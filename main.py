@@ -1,6 +1,7 @@
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
+import random
 from tqdm import tqdm
 def build_nonzeroC(C, S):
     """
@@ -78,23 +79,27 @@ def cov_matrix(S, Sigma_prev, A, W, V, C):
 
     return Sigma
 def random_schedule(A, C, W, V, S0, K, l):
+    print(K)
     n = A.shape[0]
     G = C.shape[0]
     Q = list(range(1, G + 1))
     # ---- Random Scheduling ----
-    S_all = list(itertools.combinations(Q, K))
-    num_combinations = len(S_all)
-    S_rand = [S_all[np.random.randint(0, num_combinations)] for _ in range(l)]
+    # print(Q)
+    # S_all = list(itertools.combinations(Q, K))
+    # num_combinations = len(S_all)
+    # print(num_combinations)
+    # S_rand = [S_all[np.random.randint(0, num_combinations)] for _ in range(l)]
+    S_rand = [tuple(sorted(random.sample(Q, K)))]
     print(S_rand)
     Sigma_rand = np.zeros((n, n, l + 1))
     Sigma_rand[:, :, 0] = S0
     # Compute covariance matrices for random scheduling
-    for t in range(1, l + 1):
-        S_t = S_rand[t - 1]
-        ### take around 4 hours to run
-        Sigma_rand[:, :, t] = cov_matrix(S_t, Sigma_rand[:, :, t - 1], A, W, V, C)
-        ###
-        print(Sigma_rand)
+    # for t in range(1, l + 1):
+    #     S_t = S_rand[t - 1]
+    #     ### take around 4 hours to run
+    #     Sigma_rand[:, :, t] = cov_matrix(S_t, Sigma_rand[:, :, t - 1], A, W, V, C)
+    #     ###
+    #     print(Sigma_rand)
     return Sigma_rand, S_rand
 
 def greedy_schedule(A, C, W, V, S0, K, l):

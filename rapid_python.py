@@ -42,11 +42,11 @@ class RAPIDKF:
         self.epsilon: float = 0  # Muskingum parameter threshold
         self.radius: int = 10
         self.i_factor: float = 2.58  # Enforced on covariance P
-        self.days: int = 366 + 365 + 365 + 365  # 2010 to 2013
+        self.days: int = 50  # 2010 to 2013
         self.month: int = self.days // 365 * 12
         self.timestep: int = 0
 
-        self.K = 2 #number of sensors to be selected
+        self.K = 12 #number of sensors to be selected
         
         if load_mode in [0, 2]:
             self.load_file(dir_path)
@@ -172,7 +172,8 @@ class RAPIDKF:
 
         self.H = np.dot(self.S, self.Ae_day)
         self.Q0 = np.zeros_like(self.u[0])
-            
+        with open("trace.txt",'w') as f:
+            f.write(f"K={self.K}\n")
         # ## Check the system observability (commented out for now)
         # n = self.x.shape[0]
         # O_mat = self.H 
@@ -243,6 +244,8 @@ class RAPIDKF:
             discharge_estimation.append(discharge_avg)
             open_loop_x.append(copy.deepcopy(self.get_discharge()))
             self.cov_trace.append(np.trace(self.P))
+            with open("trace.txt",'a') as f:
+                f.write(f"{np.trace(self.P)}\n")
         # Save results to the created directory
         dir_path = os.path.dirname(os.path.realpath(__file__))
         dir_path = os.path.join(dir_path,self.sub_dir_path)
